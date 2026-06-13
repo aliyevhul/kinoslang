@@ -25,8 +25,8 @@ export default function App() {
       <AuthProvider>
         <UserProfileProvider>
           <DictionaryProvider>
-            <AchievementProvider>
-              <StreakProvider>
+            <StreakProvider>
+              <AchievementProvider>
                 <ModalProvider>
                   <Layout>
                     <Routes>
@@ -44,8 +44,8 @@ export default function App() {
                   </Layout>
                   <AuthModal />
                 </ModalProvider>
-              </StreakProvider>
-            </AchievementProvider>
+              </AchievementProvider>
+            </StreakProvider>
           </DictionaryProvider>
         </UserProfileProvider>
       </AuthProvider>
