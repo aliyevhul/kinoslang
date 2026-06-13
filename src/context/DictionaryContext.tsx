@@ -43,7 +43,7 @@ export function DictionaryProvider({ children }: { children: ReactNode }) {
       // Logged in: listen to Firestore
       setLoading(true);
       const userDocRef = doc(db, "users", user.uid);
-      unsubscribe = onSnapshot(userDocRef, (docSnap) => {
+      unsubscribe = onSnapshot(userDocRef, (docSnap: any) => {
         if (docSnap.exists()) {
           const data = docSnap.data();
           setDictionary(data.dictionary || []);

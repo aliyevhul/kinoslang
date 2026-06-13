@@ -67,7 +67,7 @@ export default function Leaderboard() {
     try {
       const snapshot = await getDocs(collection(db, "users"));
       const fetchedUsers: LeaderboardUser[] = [];
-      snapshot.forEach((docSnap) => {
+      snapshot.forEach((docSnap: any) => {
         const data = docSnap.data();
         const name = data.name || data.displayName || "Anonymous";
         fetchedUsers.push({

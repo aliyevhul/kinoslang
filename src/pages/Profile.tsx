@@ -1,791 +1,385 @@
 import { useState, useEffect, useRef } from 'react';
-import { useNavigate, Link } from 'react-router-dom';
+import { Link } from 'react-router-dom';
 import {
-  BookOpen,
-  Zap,
-  MessageCircle,
-  Flame,
-  Star,
-  Check,
-  RotateCcw,
-  ChevronRight,
-  Camera,
-  LogOut,
-  Trophy,
-  Heart,
+  BookOpen, Zap, MessageCircle, Flame, Trophy, Check, X, Pencil,
+  MapPin, Calendar, Award, TrendingUp, Target,
 } from 'lucide-react';
 import {
-  PieChart,
-  Pie,
-  Cell,
-  ResponsiveContainer,
-  Tooltip,
+  PieChart, Pie, Cell, ResponsiveContainer, Tooltip,
+  BarChart, Bar, XAxis, LineChart, Line, CartesianGrid,
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useDictionary } from '../context/DictionaryContext';
+import { useUserProfile } from '../context/UserProfileContext';
+import { useStreak } from '../context/StreakContext';
+import { useAchievements } from '../context/AchievementContext';
 import { useModal } from '../context/ModalContext';
-import { updateProfile } from 'firebase/auth';
-import { auth } from '../firebase/config';
+import AvatarUpload from '../components/AvatarUpload';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
 gsap.registerPlugin(ScrollTrigger);
 
-/* ── helpers ── */
 function getRankTitle(words: number): string {
-  if (words >= 1000) return 'Slang Legend';
-  if (words >= 500) return 'Slang Master';
-  if (words >= 200) return 'Movie Buff';
-  if (words >= 50) return 'Legend';
-  if (words >= 20) return 'Mafia Don';
-  if (words >= 10) return 'Gangster';
+  if (words >= 100) return 'Slang Legend';
+  if (words >= 50) return 'Word Master';
+  if (words >= 20) return 'Movie Buff';
+  if (words >= 10) return 'Word Hunter';
   if (words >= 5) return 'Local';
-  if (words >= 2) return 'Wanderer';
   return 'Newbie';
 }
 
-/* ── activity mock data ── */
-const ACTIVITIES = [
-  {
-    id: 1,
-    type: 'saved' as const,
-    text: "Saved 'no cap' from Friends",
-    time: '2 hours ago',
-  },
-  {
-    id: 2,
-    type: 'mastered' as const,
-    text: "Mastered 'chill' in flashcards",
-    time: '5 hours ago',
-  },
-  {
-    id: 3,
-    type: 'saved' as const,
-    text: "Saved 'FOMO' from Social Media",
-    time: '1 day ago',
-  },
-  {
-    id: 4,
-    type: 'practiced' as const,
-    text: 'Practiced 12 words',
-    time: '1 day ago',
-  },
-  {
-    id: 5,
-    type: 'saved' as const,
-    text: "Saved 'spill the tea' from Internet",
-    time: '2 days ago',
-  },
-  {
-    id: 6,
-    type: 'mastered' as const,
-    text: "Mastered 'ghost' from dating apps",
-    time: '3 days ago',
-  },
-  {
-    id: 7,
-    type: 'saved' as const,
-    text: "Saved 'lit' from The Hangover",
-    time: '4 days ago',
-  },
-];
+const DIFF_COLORS = { easy: '#22C55E', medium: '#F59E0B', hard: '#EF4444' };
 
-const ACTIVITY_ICON = {
-  saved: { icon: Heart, bg: 'rgba(229,9,20,0.1)', color: '#E50914' },
-  mastered: { icon: Check, bg: 'rgba(34,197,94,0.1)', color: '#22C55E' },
-  practiced: { icon: RotateCcw, bg: 'rgba(59,130,246,0.1)', color: '#3B82F6' },
-};
-
-/* ── chart helpers ── */
-
-/* ── chart data (from real dictionary) ── */
-function getDifficultyData(dictionary: { difficulty: string }[]) {
-  const easy = dictionary.filter((w) => w.difficulty === 'easy').length;
-  const medium = dictionary.filter((w) => w.difficulty === 'medium').length;
-  const hard = dictionary.filter((w) => w.difficulty === 'hard').length;
-  return [
-    { name: 'Easy', value: easy || 0, color: '#22C55E' },
-    { name: 'Medium', value: medium || 0, color: '#F59E0B' },
-    { name: 'Hard', value: hard || 0, color: '#EF4444' },
-  ];
-}
-
-function getTypeData(dictionary: { type: string }[]) {
-  const typeCounts: Record<string, number> = {};
-  dictionary.forEach((w) => {
-    const t = w.type;
-    typeCounts[t] = (typeCounts[t] || 0) + 1;
-  });
-  const colors = ['#E50914', '#3B82F6', '#8B5CF6', '#F59E0B', '#22C55E', '#6B7280', '#F97316', '#EC4899'];
-  return Object.entries(typeCounts)
-    .map(([name, count], i) => ({ name, count, color: colors[i % colors.length] }))
-    .sort((a, b) => b.count - a.count)
-    .slice(0, 8);
-}
-
-/* ── component ── */
 export default function Profile() {
-  const { user, logout } = useAuth();
+  const { user } = useAuth();
   const { dictionary } = useDictionary();
+  const { profile, updateProfileData, uploadAvatar } = useUserProfile();
+  const { streak, isGoalMet } = useStreak();
+  const { achievements, checkAchievements } = useAchievements();
   const { openAuth } = useModal();
-  const navigate = useNavigate();
+  const pageRef = useRef<HTMLDivElement>(null);
 
-  const [displayName, setDisplayName] = useState(user?.displayName || '');
-  const [nativeLang, setNativeLang] = useState('en');
-  const [isSaving, setIsSaving] = useState(false);
-  const [saveMsg, setSaveMsg] = useState<string | null>(null);
+  const [editingName, setEditingName] = useState(false);
+  const [editingBio, setEditingBio] = useState(false);
+  const [editingLocation, setEditingLocation] = useState(false);
+  const [nameValue, setNameValue] = useState('');
+  const [bioValue, setBioValue] = useState('');
+  const [locValue, setLocValue] = useState('');
 
-  /* refs for GSAP */
-  const headerRef = useRef<HTMLDivElement>(null);
-  const statsRef = useRef<HTMLDivElement>(null);
-  const chartsRef = useRef<HTMLDivElement>(null);
-  const activityRef = useRef<HTMLDivElement>(null);
-  const settingsRef = useRef<HTMLDivElement>(null);
-  const activityItemRefs = useRef<(HTMLDivElement | null)[]>([]);
-
-  /* derived stats */
-  const totalWords = dictionary.length;
-  const hardWords = dictionary.filter((w) => w.difficulty === 'hard').length;
-  const streetSlang = dictionary.filter((w) => w.type.toLowerCase().includes('street')).length;
-  const rankTitle = getRankTitle(totalWords);
-  const streakDays = 15;
-  const bestStreak = 28;
-
-  const difficultyData = getDifficultyData(dictionary);
-  const typeData = getTypeData(dictionary);
-
-  /* Update displayName when user changes */
   useEffect(() => {
-    if (user?.displayName) {
-      setDisplayName(user.displayName);
-    }
-  }, [user?.displayName]);
+    checkAchievements().catch(() => {});
+  }, [checkAchievements, dictionary.length]);
 
-  /* GSAP animations */
   useEffect(() => {
-    const ctx = gsap.context(() => {
-      /* header */
-      if (headerRef.current) {
-        const children = headerRef.current.children;
-        gsap.fromTo(
-          children,
-          { opacity: 0, y: 20 },
-          { opacity: 1, y: 0, duration: 0.5, stagger: 0.1, ease: 'power3.out' }
-        );
-      }
-
-      /* stats cards */
-      if (statsRef.current) {
-        const cards = statsRef.current.querySelectorAll('.stat-card');
-        gsap.fromTo(
-          cards,
-          { opacity: 0, y: 25 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.5,
-            stagger: 0.08,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: statsRef.current,
-              start: 'top 85%',
-              toggleActions: 'play none none none',
-            },
-          }
-        );
-      }
-
-      /* charts section */
-      if (chartsRef.current) {
-        gsap.fromTo(
-          chartsRef.current,
-          { opacity: 0, y: 20 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.5,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: chartsRef.current,
-              start: 'top 85%',
-              toggleActions: 'play none none none',
-            },
-          }
-        );
-      }
-
-      /* activity section header */
-      if (activityRef.current) {
-        const header = activityRef.current.querySelector('.activity-header');
-        if (header) {
-          gsap.fromTo(
-            header,
-            { opacity: 0 },
-            {
-              opacity: 1,
-              duration: 0.4,
-              scrollTrigger: {
-                trigger: activityRef.current,
-                start: 'top 85%',
-                toggleActions: 'play none none none',
-              },
-            }
-          );
-        }
-      }
-
-      /* settings section */
-      if (settingsRef.current) {
-        gsap.fromTo(
-          settingsRef.current,
-          { opacity: 0, y: 20 },
-          {
-            opacity: 1,
-            y: 0,
-            duration: 0.5,
-            ease: 'power2.out',
-            scrollTrigger: {
-              trigger: settingsRef.current,
-              start: 'top 85%',
-              toggleActions: 'play none none none',
-            },
-          }
-        );
-      }
-    });
-
-    return () => ctx.revert();
-  }, []);
-
-  /* activity items scroll reveal */
-  useEffect(() => {
-    const ctx = gsap.context(() => {
-      activityItemRefs.current.forEach((item, i) => {
-        if (!item) return;
-        gsap.fromTo(
-          item,
-          { opacity: 0, x: -15 },
-          {
-            opacity: 1,
-            x: 0,
-            duration: 0.4,
-            ease: 'power2.out',
-            delay: i * 0.06,
-            scrollTrigger: {
-              trigger: item,
-              start: 'top 95%',
-              toggleActions: 'play none none none',
-            },
-          }
-        );
+    if (!pageRef.current) return;
+    const mm = gsap.matchMedia();
+    mm.add('(min-width: 768px)', () => {
+      gsap.utils.toArray<HTMLElement>('.profile-section').forEach((el, i) => {
+        gsap.fromTo(el, { opacity: 0, y: 30 }, {
+          opacity: 1, y: 0, duration: 0.5, delay: i * 0.1,
+          ease: 'power2.out',
+          scrollTrigger: { trigger: el, start: 'top 90%', toggleActions: 'play none none none' },
+        });
       });
     });
-
-    return () => ctx.revert();
+    return () => mm.revert();
   }, []);
 
-  const handleSaveName = async () => {
-    if (!displayName.trim()) return;
-    setIsSaving(true);
-    setSaveMsg(null);
-    try {
-      if (auth.currentUser) {
-        await updateProfile(auth.currentUser, { displayName: displayName.trim() });
-        setSaveMsg('Display name updated!');
-        setTimeout(() => setSaveMsg(null), 3000);
-      }
-    } catch (err) {
-      setSaveMsg('Failed to update name');
-    } finally {
-      setIsSaving(false);
-    }
-  };
-
-  /* ── not logged in state ── */
   if (!user) {
     return (
-      <div className="min-h-[100dvh] bg-[#050505] flex items-center justify-center px-4">
-        <div className="text-center max-w-[400px]">
-          <div className="w-20 h-20 mx-auto rounded-full bg-[#111111] border-2 border-[#222222] flex items-center justify-center mb-6">
-            <Star size={32} className="text-[#666666]" />
+      <div className="min-h-[80vh] flex items-center justify-center" style={{ background: '#050505' }}>
+        <div className="text-center">
+          <div className="w-20 h-20 rounded-full mx-auto mb-4 flex items-center justify-center" style={{ background: '#111', border: '2px solid #222' }}>
+            <Trophy size={32} className="text-[#E50914]" />
           </div>
-          <h2 className="text-[2rem] font-bold text-white tracking-[-0.02em] mb-3">
-            Sign In to View Profile
-          </h2>
-          <p className="text-[#999999] text-[1rem] mb-8 leading-relaxed">
-            Track your progress, view your stats, and climb the leaderboard.
-          </p>
-          <button
-            onClick={openAuth}
-            className="inline-block bg-[#E50914] text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-8 py-3 rounded-md transition-all duration-200 hover:bg-[#B20710] hover:-translate-y-[1px]"
-          >
+          <h2 className="text-2xl font-bold text-white mb-2">Sign in to view your profile</h2>
+          <p className="text-[#999] mb-6">Track your progress, earn achievements, and build your slang vocabulary</p>
+          <button onClick={openAuth} className="px-8 py-3 rounded-lg font-semibold text-white transition-all hover:opacity-90" style={{ background: '#E50914' }}>
             Sign In
           </button>
-          <p className="mt-6 text-[#666666] text-[0.875rem]">
-            or{' '}
-            <Link
-              to="/leaderboard"
-              className="text-[#E50914] font-medium hover:underline"
-            >
-              view the leaderboard
-            </Link>
-          </p>
         </div>
       </div>
     );
   }
 
+  const totalWords = dictionary.length;
+  const hardWords = dictionary.filter((w) => w.difficulty === 'hard').length;
+  const streetWords = dictionary.filter((w) => w.type.toLowerCase().includes('street')).length;
+  const easyWords = dictionary.filter((w) => w.difficulty === 'easy').length;
+  const mediumWords = dictionary.filter((w) => w.difficulty === 'medium').length;
+
+  const diffData = [
+    { name: 'Easy', value: easyWords, color: DIFF_COLORS.easy },
+    { name: 'Medium', value: mediumWords, color: DIFF_COLORS.medium },
+    { name: 'Hard', value: hardWords, color: DIFF_COLORS.hard },
+  ].filter((d) => d.value > 0);
+
+  const typeCounts: Record<string, number> = {};
+  dictionary.forEach((w) => { typeCounts[w.type] = (typeCounts[w.type] || 0) + 1; });
+  const typeData = Object.entries(typeCounts).map(([name, value]) => ({ name, value })).sort((a, b) => b.value - a.value);
+
+  // Mock progress data
+  const progressData = Array.from({ length: 7 }, (_, i) => ({
+    day: ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'][i],
+    words: Math.floor(totalWords * (i + 1) / 7),
+  }));
+
+  const unlockedAchievements = achievements.filter((a) => a.unlockedAt).slice(0, 6);
+  const rankTitle = getRankTitle(totalWords);
+
+  const handleSaveName = async () => {
+    if (nameValue.trim()) await updateProfileData({ displayName: nameValue.trim() });
+    setEditingName(false);
+  };
+
+  const handleSaveBio = async () => {
+    await updateProfileData({ bio: bioValue.trim() });
+    setEditingBio(false);
+  };
+
+  const handleSaveLoc = async () => {
+    await updateProfileData({ location: locValue.trim() });
+    setEditingLocation(false);
+  };
+
+  const handleAvatarUpload = async (file: File) => {
+    try { await uploadAvatar(file); } catch (e) { console.error(e); }
+  };
+
   return (
-    <div className="min-h-[100dvh] bg-[#050505]">
-      {/* ── Section 1: Profile Header ── */}
-      <div className="pt-[120px] pb-8 px-4 md:px-8 lg:px-16">
-        <div
-          ref={headerRef}
-          className="max-w-[1200px] mx-auto flex flex-col md:flex-row items-center md:items-start gap-6 md:gap-8"
-        >
-          {/* Avatar */}
-          <div className="relative group shrink-0">
-            <div
-              className="w-[72px] h-[72px] md:w-[96px] md:h-[96px] rounded-full flex items-center justify-center text-[2rem] md:text-[2.5rem] font-bold text-white"
-              style={{
-                border: '3px solid #E50914',
-                boxShadow: '0 0 24px rgba(229,9,20,0.2)',
-                backgroundColor: '#111111',
-                fontFamily: 'Inter, sans-serif',
-              }}
-            >
-              {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
-            </div>
-            {/* Edit overlay */}
-            <div className="absolute inset-0 rounded-full bg-[rgba(5,5,5,0.6)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer">
-              <Camera size={24} className="text-white" />
-            </div>
+    <div ref={pageRef} style={{ background: '#050505', minHeight: '100dvh' }}>
+      <div className="max-w-[1440px] mx-auto px-4 md:px-8 py-8">
+        {/* Header */}
+        <div className="profile-section mb-8">
+          <div className="flex items-center gap-4 mb-2">
+            <Flame size={24} className="text-[#E50914]" />
+            <span className="text-white font-semibold">{streak.currentStreak}-day streak</span>
+            <span className="text-[#666]">|</span>
+            <span className="text-[#999] text-sm">{streak.todayProgress}/{streak.dailyGoal} today</span>
           </div>
-
-          {/* User Info */}
-          <div className="flex flex-col items-center md:items-start gap-2 text-center md:text-left">
-            <h1
-              className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-white tracking-[-0.02em]"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              @{user.displayName || user.email?.split('@')[0] || 'User'}
-            </h1>
-
-            {/* Rank Badge */}
-            <div
-              className="inline-flex items-center gap-2 px-3.5 py-1 rounded-full"
-              style={{ backgroundColor: 'rgba(229,9,20,0.1)' }}
-            >
-              <Star size={18} className="text-[#E50914]" />
-              <span
-                className="text-[0.9375rem] font-semibold text-[#E50914]"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                {rankTitle}
-              </span>
-            </div>
-
-            {/* Meta Row */}
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-1">
-              <span
-                className="text-[0.75rem] text-[#666666]"
-                style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-              >
-                {user.email}
-              </span>
-              <span
-                className="text-[0.75rem] font-medium text-[#E50914]"
-                style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-              >
-                {totalWords} words
-              </span>
-            </div>
-
-            {/* Leaderboard Link */}
-            <Link
-              to="/leaderboard"
-              className="inline-flex items-center gap-1 mt-1 text-[0.875rem] font-medium text-[#E50914] hover:underline transition-colors duration-200"
-            >
-              <Trophy size={16} />
-              View on Leaderboard
-              <ChevronRight size={16} />
-            </Link>
+          <div className="w-full h-2 rounded-full overflow-hidden" style={{ background: '#222' }}>
+            <div className="h-full rounded-full transition-all duration-500" style={{
+              width: `${Math.min(100, (streak.todayProgress / streak.dailyGoal) * 100)}%`,
+              background: 'linear-gradient(90deg, #E50914, #ff6b35)',
+            }} />
           </div>
         </div>
-      </div>
 
-      {/* ── Section 2: Stats Overview ── */}
-      <div className="py-8 px-4 md:px-8 lg:px-16">
-        <div
-          ref={statsRef}
-          className="max-w-[1200px] mx-auto grid grid-cols-2 md:grid-cols-4 gap-5"
-        >
-          {/* Total Words */}
-          <div className="stat-card bg-[#111111] border border-[#222222] rounded-xl p-6 flex flex-col gap-3 transition-all duration-300 hover:border-[rgba(229,9,20,0.2)] hover:-translate-y-[2px]">
-            <BookOpen size={24} className="text-[#E50914]" />
-            <span
-              className="text-[2rem] font-extrabold text-white"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              {totalWords.toLocaleString()}
-            </span>
-            <span className="text-[0.875rem] font-medium text-[#999999]">
-              Total Words
-            </span>
-            <span
-              className="text-[0.75rem] font-medium text-[#22C55E] mt-auto"
-              style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-            >
-              +24 this week
-            </span>
-          </div>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          {/* Left Column - Profile Card */}
+          <div className="profile-section space-y-4">
+            <div className="rounded-2xl p-6" style={{ background: '#111', border: '1px solid #222' }}>
+              <div className="flex flex-col items-center mb-4">
+                <AvatarUpload
+                  photoURL={profile?.photoURL}
+                  displayName={profile?.displayName || user.displayName || 'User'}
+                  size="xl"
+                  editable
+                  onUpload={handleAvatarUpload}
+                />
+              </div>
 
-          {/* Hard Words */}
-          <div className="stat-card bg-[#111111] border border-[#222222] rounded-xl p-6 flex flex-col gap-3 transition-all duration-300 hover:border-[rgba(239,68,68,0.2)] hover:-translate-y-[2px]">
-            <Zap size={24} className="text-[#EF4444]" />
-            <span
-              className="text-[2rem] font-extrabold text-white"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              {hardWords}
-            </span>
-            <span className="text-[0.875rem] font-medium text-[#999999]">
-              Hard Words
-            </span>
-            <span
-              className="text-[0.75rem] font-medium text-[#22C55E] mt-auto"
-              style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-            >
-              +3 this week
-            </span>
-          </div>
-
-          {/* Street Slang */}
-          <div className="stat-card bg-[#111111] border border-[#222222] rounded-xl p-6 flex flex-col gap-3 transition-all duration-300 hover:border-[rgba(245,158,11,0.2)] hover:-translate-y-[2px]">
-            <MessageCircle size={24} className="text-[#F59E0B]" />
-            <span
-              className="text-[2rem] font-extrabold text-white"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              {streetSlang}
-            </span>
-            <span className="text-[0.875rem] font-medium text-[#999999]">
-              Street Slang
-            </span>
-            <span
-              className="text-[0.75rem] font-medium text-[#22C55E] mt-auto"
-              style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-            >
-              +12 this week
-            </span>
-          </div>
-
-          {/* Current Streak */}
-          <div className="stat-card bg-[#111111] border border-[#222222] rounded-xl p-6 flex flex-col gap-3 transition-all duration-300 hover:border-[rgba(249,115,22,0.2)] hover:-translate-y-[2px]">
-            <Flame size={24} className="text-[#F97316]" />
-            <span
-              className="text-[2rem] font-extrabold text-white"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            >
-              {streakDays} days
-            </span>
-            <span className="text-[0.875rem] font-medium text-[#999999]">
-              Learning Streak
-            </span>
-            <span
-              className="text-[0.75rem] font-medium text-[#666666] mt-auto"
-              style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-            >
-              Best: {bestStreak} days
-            </span>
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 3: Learning Breakdown (Charts) ── */}
-      <div className="py-8 px-4 md:px-8 lg:px-16">
-        <div
-          ref={chartsRef}
-          className="max-w-[1200px] mx-auto grid grid-cols-1 md:grid-cols-2 gap-6"
-        >
-          {/* Difficulty Donut Chart */}
-          <div className="bg-[#111111] border border-[#222222] rounded-xl p-6">
-            <h3 className="text-[1rem] font-semibold text-white mb-6">
-              By Difficulty
-            </h3>
-            <div className="flex flex-col items-center">
-              {totalWords > 0 ? (
-                <>
-                  <ResponsiveContainer width="100%" height={220}>
-                    <PieChart>
-                      <Pie
-                        data={difficultyData}
-                        cx="50%"
-                        cy="50%"
-                        innerRadius={60}
-                        outerRadius={90}
-                        paddingAngle={3}
-                        dataKey="value"
-                        stroke="none"
-                      >
-                        {difficultyData.map((entry) => (
-                          <Cell key={entry.name} fill={entry.color} />
-                        ))}
-                      </Pie>
-                      <Tooltip
-                        contentStyle={{
-                          backgroundColor: '#111111',
-                          border: '1px solid #222222',
-                          borderRadius: '8px',
-                          color: '#FFFFFF',
-                          fontSize: '0.8125rem',
-                        }}
-                        itemStyle={{ color: '#FFFFFF' }}
-                      />
-                    </PieChart>
-                  </ResponsiveContainer>
-                  {/* Center text */}
-                  <div className="absolute mt-[-140px] pointer-events-none">
-                    <div className="text-center">
-                      <span
-                        className="text-[1.5rem] font-bold text-white block"
-                        style={{ fontFamily: 'Inter, sans-serif' }}
-                      >
-                        {totalWords.toLocaleString()}
-                      </span>
-                      <span
-                        className="text-[0.6875rem] text-[#666666] uppercase"
-                        style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-                      >
-                        Words
-                      </span>
-                    </div>
+              {/* Name */}
+              <div className="text-center mb-3">
+                {editingName ? (
+                  <div className="flex items-center gap-2 justify-center">
+                    <input
+                      value={nameValue}
+                      onChange={(e) => setNameValue(e.target.value)}
+                      className="bg-[#1A1A1A] border border-[#333] rounded px-2 py-1 text-white text-center"
+                      autoFocus
+                    />
+                    <button onClick={handleSaveName} className="text-green-500"><Check size={16} /></button>
+                    <button onClick={() => setEditingName(false)} className="text-red-500"><X size={16} /></button>
                   </div>
-                </>
+                ) : (
+                  <div className="flex items-center gap-2 justify-center">
+                    <h2 className="text-xl font-bold text-white">{profile?.displayName || user.displayName || 'User'}</h2>
+                    <button onClick={() => { setNameValue(profile?.displayName || ''); setEditingName(true); }} className="text-[#666] hover:text-[#E50914]">
+                      <Pencil size={14} />
+                    </button>
+                  </div>
+                )}
+                <p className="text-[#999] text-sm">{user.email}</p>
+              </div>
+
+              {/* Rank Badge */}
+              <div className="flex justify-center mb-4">
+                <span className="px-4 py-1.5 rounded-full text-xs font-bold uppercase tracking-wider" style={{ background: 'rgba(229,9,20,0.15)', color: '#E50914', border: '1px solid rgba(229,9,20,0.3)' }}>
+                  {rankTitle}
+                </span>
+              </div>
+
+              {/* Bio */}
+              {editingBio ? (
+                <div className="mb-3">
+                  <textarea
+                    value={bioValue}
+                    onChange={(e) => setBioValue(e.target.value)}
+                    className="w-full bg-[#1A1A1A] border border-[#333] rounded-lg p-2 text-white text-sm resize-none"
+                    rows={3}
+                    placeholder="Tell us about yourself..."
+                    autoFocus
+                  />
+                  <div className="flex gap-2 mt-1 justify-end">
+                    <button onClick={handleSaveBio} className="text-green-500"><Check size={16} /></button>
+                    <button onClick={() => setEditingBio(false)} className="text-red-500"><X size={16} /></button>
+                  </div>
+                </div>
               ) : (
-                <div className="h-[220px] flex items-center justify-center text-[#666666] text-[0.875rem]">
-                  No words saved yet
+                <div className="mb-3">
+                  <p className="text-[#999] text-sm text-center">{profile?.bio || 'No bio yet'}</p>
+                  <button onClick={() => { setBioValue(profile?.bio || ''); setEditingBio(true); }} className="text-[#E50914] text-xs hover:underline block mx-auto mt-1">
+                    {profile?.bio ? 'Edit bio' : 'Add bio'}
+                  </button>
                 </div>
               )}
-              {/* Legend */}
-              <div className="flex flex-wrap justify-center gap-4 mt-4">
-                {difficultyData.map((d) => (
-                  <div key={d.name} className="flex items-center gap-2">
-                    <div
-                      className="w-2 h-2 rounded-full"
-                      style={{ backgroundColor: d.color }}
+
+              {/* Location */}
+              <div className="flex items-center gap-2 justify-center text-sm mb-3">
+                <MapPin size={14} className="text-[#666]" />
+                {editingLocation ? (
+                  <div className="flex items-center gap-1">
+                    <input
+                      value={locValue}
+                      onChange={(e) => setLocValue(e.target.value)}
+                      className="bg-[#1A1A1A] border border-[#333] rounded px-2 py-0.5 text-white text-sm w-32"
+                      autoFocus
                     />
-                    <span className="text-[0.8125rem] font-medium text-[#999999]">
-                      {d.name}
-                    </span>
-                    <span className="text-[0.8125rem] font-semibold text-white">
-                      {d.value}
-                    </span>
+                    <button onClick={handleSaveLoc} className="text-green-500"><Check size={14} /></button>
+                    <button onClick={() => setEditingLocation(false)} className="text-red-500"><X size={14} /></button>
                   </div>
-                ))}
+                ) : (
+                  <button onClick={() => { setLocValue(profile?.location || ''); setEditingLocation(true); }} className="text-[#999] hover:text-white">
+                    {profile?.location || 'Add location'}
+                  </button>
+                )}
               </div>
+
+              {/* Member since */}
+              <div className="flex items-center gap-2 justify-center text-sm text-[#666]">
+                <Calendar size={14} />
+                <span>Member since {profile?.createdAt ? new Date(profile.createdAt).toLocaleDateString() : 'Recently'}</span>
+              </div>
+
+              <Link
+                to="/settings"
+                className="mt-4 w-full py-2 rounded-lg text-sm font-semibold text-center block transition-all hover:opacity-90"
+                style={{ background: '#E50914', color: '#fff' }}
+              >
+                Edit Profile
+              </Link>
             </div>
           </div>
 
-          {/* Slang Type Bar Chart */}
-          <div className="bg-[#111111] border border-[#222222] rounded-xl p-6">
-            <h3 className="text-[1rem] font-semibold text-white mb-6">
-              By Type
-            </h3>
-            {totalWords > 0 && typeData.length > 0 ? (
-              <div className="space-y-4">
-                {typeData.map((t) => {
-                  const max = Math.max(...typeData.map((d) => d.count));
-                  const pct = max > 0 ? Math.round((t.count / max) * 100) : 0;
-                  return (
-                    <div key={t.name}>
-                      <div className="flex items-center justify-between mb-1.5">
-                        <span className="text-[0.875rem] font-medium text-white">
-                          {t.name}
-                        </span>
-                        <span className="text-[0.75rem] font-medium text-[#999999]">
-                          {t.count} ({totalWords > 0 ? Math.round((t.count / totalWords) * 100) : 0}%)
-                        </span>
-                      </div>
-                      <div className="w-full h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
-                        <div
-                          className="h-full rounded-full transition-all duration-1000 ease-out"
-                          style={{
-                            width: `${pct}%`,
-                            backgroundColor: t.color,
-                          }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
+          {/* Center Column - Stats */}
+          <div className="space-y-4">
+            {/* Stat Cards */}
+            <div className="profile-section grid grid-cols-2 gap-3">
+              {[
+                { label: 'Total Words', value: totalWords, icon: <BookOpen size={20} />, color: '#E50914' },
+                { label: 'Hard Words', value: hardWords, icon: <Zap size={20} />, color: '#EF4444' },
+                { label: 'Street Slang', value: streetWords, icon: <MessageCircle size={20} />, color: '#F59E0B' },
+                { label: 'Longest Streak', value: streak.longestStreak, icon: <Flame size={20} />, color: '#22C55E' },
+              ].map((stat) => (
+                <div key={stat.label} className="rounded-xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+                  <div className="flex items-center gap-2 mb-1" style={{ color: stat.color }}>{stat.icon}<span className="text-xs uppercase tracking-wider" style={{ color: '#666' }}>{stat.label}</span></div>
+                  <p className="text-2xl font-bold text-white">{stat.value}</p>
+                </div>
+              ))}
+            </div>
+
+            {/* Line Chart - Progress */}
+            {progressData.length > 0 && (
+              <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+                <h3 className="text-white font-semibold mb-3 flex items-center gap-2"><TrendingUp size={18} className="text-[#E50914]" />Words Progress</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <LineChart data={progressData}>
+                    <CartesianGrid strokeDasharray="3 3" stroke="#222" />
+                    <XAxis dataKey="day" stroke="#666" fontSize={12} />
+                    <Tooltip contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff' }} />
+                    <Line type="monotone" dataKey="words" stroke="#E50914" strokeWidth={2} dot={{ fill: '#E50914', r: 4 }} />
+                  </LineChart>
+                </ResponsiveContainer>
               </div>
-            ) : (
-              <div className="h-[220px] flex items-center justify-center text-[#666666] text-[0.875rem]">
-                No words saved yet
+            )}
+
+            {/* Difficulty Pie Chart */}
+            {diffData.length > 0 && (
+              <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+                <h3 className="text-white font-semibold mb-3">Difficulty Breakdown</h3>
+                <ResponsiveContainer width="100%" height={180}>
+                  <PieChart>
+                    <Pie data={diffData} cx="50%" cy="50%" innerRadius={45} outerRadius={70} dataKey="value" paddingAngle={4}>
+                      {diffData.map((entry, index) => <Cell key={index} fill={entry.color} />)}
+                    </Pie>
+                    <Tooltip contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff' }} />
+                  </PieChart>
+                </ResponsiveContainer>
+                <div className="flex justify-center gap-4 mt-2">
+                  {diffData.map((d) => (
+                    <div key={d.name} className="flex items-center gap-1 text-xs text-[#999]">
+                      <span className="w-2 h-2 rounded-full" style={{ background: d.color }} />{d.name}: {d.value}
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Type Bar Chart */}
+            {typeData.length > 0 && (
+              <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+                <h3 className="text-white font-semibold mb-3">Words by Type</h3>
+                <ResponsiveContainer width="100%" height={150}>
+                  <BarChart data={typeData}>
+                    <XAxis dataKey="name" stroke="#666" fontSize={11} />
+                    <Tooltip contentStyle={{ background: '#111', border: '1px solid #333', borderRadius: '8px', color: '#fff' }} />
+                    <Bar dataKey="value" fill="#E50914" radius={[4, 4, 0, 0]} />
+                  </BarChart>
+                </ResponsiveContainer>
               </div>
             )}
           </div>
-        </div>
-      </div>
 
-      {/* ── Section 4: Recent Activity ── */}
-      <div className="py-8 px-4 md:px-8 lg:px-16">
-        <div ref={activityRef} className="max-w-[1200px] mx-auto">
-          <div className="activity-header flex items-center justify-between mb-6">
-            <h2 className="text-[1.5rem] font-bold text-white tracking-[-0.02em]">
-              Recent Activity
-            </h2>
-            <button className="text-[0.875rem] font-medium text-[#E50914] hover:underline transition-colors duration-200">
-              View All &rarr;
-            </button>
-          </div>
-
-          <div className="flex flex-col gap-3">
-            {ACTIVITIES.map((act, i) => {
-              const cfg = ACTIVITY_ICON[act.type];
-              const Icon = cfg.icon;
-              return (
-                <div
-                  key={act.id}
-                  ref={(el) => { activityItemRefs.current[i] = el; }}
-                  className="flex items-center gap-4 bg-[#111111] border border-[#222222] rounded-xl px-5 py-4 transition-all duration-200 hover:border-[rgba(229,9,20,0.2)] cursor-pointer"
-                >
-                  {/* Icon */}
-                  <div
-                    className="w-8 h-8 rounded-full flex items-center justify-center shrink-0"
-                    style={{ backgroundColor: cfg.bg }}
-                  >
-                    <Icon size={16} style={{ color: cfg.color }} />
-                  </div>
-
-                  {/* Content */}
-                  <div className="flex-1 min-w-0">
-                    <p className="text-[0.9375rem] font-medium text-white truncate">
-                      {act.text}
-                    </p>
-                    <p
-                      className="text-[0.75rem] text-[#666666] mt-0.5"
-                      style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-                    >
-                      {act.time}
-                    </p>
-                  </div>
-
-                  {/* Arrow */}
-                  <ChevronRight size={16} className="text-[#666666] shrink-0" />
+          {/* Right Column - Achievements & Activity */}
+          <div className="space-y-4">
+            {/* Achievements Mini */}
+            <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+              <div className="flex items-center justify-between mb-3">
+                <h3 className="text-white font-semibold flex items-center gap-2"><Award size={18} className="text-[#E50914]" />Achievements</h3>
+                <Link to="/achievements" className="text-[#E50914] text-xs hover:underline">View All</Link>
+              </div>
+              {unlockedAchievements.length === 0 ? (
+                <p className="text-[#666] text-sm text-center py-4">Start saving words to unlock achievements!</p>
+              ) : (
+                <div className="grid grid-cols-3 gap-2">
+                  {unlockedAchievements.map((a) => (
+                    <div key={a.id} className="text-center p-2 rounded-lg" style={{ background: '#1A1A1A' }} title={a.description}>
+                      <div className="w-10 h-10 rounded-full mx-auto mb-1 flex items-center justify-center" style={{ background: 'linear-gradient(135deg, #E50914, #8B0000)' }}>
+                        <Check size={16} className="text-white" />
+                      </div>
+                      <p className="text-[10px] text-[#999] leading-tight">{a.title}</p>
+                    </div>
+                  ))}
                 </div>
-              );
-            })}
-          </div>
-        </div>
-      </div>
-
-      {/* ── Section 5: Settings ── */}
-      <div className="py-8 pb-16 px-4 md:px-8 lg:px-16">
-        <div
-          ref={settingsRef}
-          className="max-w-[600px] mx-auto border-t border-[#222222] pt-8 mt-8"
-        >
-          <h2 className="text-[1.5rem] font-bold text-white mb-6">
-            Account Settings
-          </h2>
-
-          <div className="flex flex-col gap-5">
-            {/* Display Name */}
-            <div>
-              <label
-                className="block text-[0.875rem] font-medium text-white mb-2"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                Display Name
-              </label>
-              <input
-                type="text"
-                value={displayName}
-                onChange={(e) => setDisplayName(e.target.value)}
-                className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 px-4 text-[0.9375rem] text-white placeholder-[#666666] outline-none transition-all duration-200 focus:border-[#E50914] focus:shadow-[0_0_0_2px_#E5091480]"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              />
-              {saveMsg && (
-                <p className="mt-1.5 text-[0.75rem] font-medium text-[#22C55E]">{saveMsg}</p>
               )}
+              <p className="text-center text-xs text-[#666] mt-2">{achievements.filter((a) => a.unlockedAt).length} / {achievements.length} unlocked</p>
             </div>
 
-            {/* Email */}
-            <div>
-              <label
-                className="block text-[0.875rem] font-medium text-white mb-2"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                Email
-              </label>
-              <input
-                type="email"
-                value={user.email || ''}
-                readOnly
-                className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 px-4 text-[0.9375rem] text-[#666666] outline-none cursor-not-allowed"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              />
+            {/* Daily Goal */}
+            <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+              <h3 className="text-white font-semibold mb-2 flex items-center gap-2"><Target size={18} className="text-[#E50914]" />Daily Goal</h3>
+              <div className="flex items-center justify-between mb-1">
+                <span className="text-sm text-[#999]">Progress</span>
+                <span className="text-sm font-bold text-white">{streak.todayProgress} / {streak.dailyGoal}</span>
+              </div>
+              <div className="w-full h-3 rounded-full overflow-hidden" style={{ background: '#222' }}>
+                <div className="h-full rounded-full transition-all duration-500" style={{
+                  width: `${Math.min(100, (streak.todayProgress / streak.dailyGoal) * 100)}%`,
+                  background: isGoalMet ? 'linear-gradient(90deg, #22C55E, #16a34a)' : 'linear-gradient(90deg, #E50914, #ff6b35)',
+                }} />
+              </div>
+              {isGoalMet && <p className="text-green-500 text-xs mt-1 flex items-center gap-1"><Check size={12} /> Daily goal met!</p>}
             </div>
 
-            {/* Native Language */}
-            <div>
-              <label
-                className="block text-[0.875rem] font-medium text-white mb-2"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                Native Language
-              </label>
-              <select
-                value={nativeLang}
-                onChange={(e) => setNativeLang(e.target.value)}
-                className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 px-4 text-[0.9375rem] text-white outline-none transition-all duration-200 focus:border-[#E50914] focus:shadow-[0_0_0_2px_#E5091480] appearance-none cursor-pointer"
-                style={{ fontFamily: 'Inter, sans-serif' }}
-              >
-                <option value="en">English</option>
-                <option value="es">Spanish</option>
-                <option value="fr">French</option>
-                <option value="de">German</option>
-                <option value="it">Italian</option>
-                <option value="pt">Portuguese</option>
-                <option value="ja">Japanese</option>
-                <option value="ko">Korean</option>
-                <option value="zh">Chinese</option>
-                <option value="ru">Russian</option>
-              </select>
-            </div>
-
-            {/* Save / Cancel */}
-            <div className="flex gap-3 mt-2">
-              <button
-                onClick={handleSaveName}
-                disabled={isSaving}
-                className="bg-[#E50914] text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-6 py-3 rounded-md transition-all duration-200 hover:bg-[#B20710] hover:-translate-y-[1px] disabled:opacity-60"
-              >
-                {isSaving ? 'Saving...' : 'Save Changes'}
-              </button>
-              <button
-                onClick={() => setDisplayName(user.displayName || '')}
-                className="bg-transparent text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-6 py-3 rounded-md border border-[#222222] transition-all duration-200 hover:border-[#E50914] hover:text-[#E50914]"
-              >
-                Cancel
-              </button>
-            </div>
-
-            {/* Danger Zone - Logout */}
-            <div className="border-t border-[rgba(239,68,68,0.2)] pt-6 mt-6">
-              <button
-                onClick={() => {
-                  logout();
-                  navigate('/');
-                }}
-                className="inline-flex items-center gap-2 text-[#EF4444] font-medium text-[0.875rem] px-5 py-2.5 rounded-md border transition-all duration-200 hover:bg-[rgba(239,68,68,0.05)]"
-                style={{ borderColor: 'rgba(239,68,68,0.3)' }}
-              >
-                <LogOut size={16} />
-                Log Out
-              </button>
+            {/* Quick Actions */}
+            <div className="profile-section rounded-2xl p-4" style={{ background: '#111', border: '1px solid #222' }}>
+              <h3 className="text-white font-semibold mb-3">Quick Links</h3>
+              <div className="space-y-2">
+                <Link to="/dictionary" className="flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-[#1A1A1A]" style={{ background: '#1A1A1A' }}>
+                  <BookOpen size={18} className="text-[#E50914]" /><span className="text-white text-sm">My Dictionary</span><span className="ml-auto text-[#E50914] font-bold">{totalWords}</span>
+                </Link>
+                <Link to="/flashcards" className="flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-[#1A1A1A]" style={{ background: '#1A1A1A' }}>
+                  <Zap size={18} className="text-[#F59E0B]" /><span className="text-white text-sm">Flashcards</span>
+                </Link>
+                <Link to="/leaderboard" className="flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-[#1A1A1A]" style={{ background: '#1A1A1A' }}>
+                  <Trophy size={18} className="text-[#FFD700]" /><span className="text-white text-sm">Leaderboard</span>
+                </Link>
+                <Link to="/settings" className="flex items-center gap-3 p-3 rounded-lg transition-colors hover:bg-[#1A1A1A]" style={{ background: '#1A1A1A' }}>
+                  <Award size={18} className="text-[#999]" /><span className="text-white text-sm">Settings</span>
+                </Link>
+              </div>
             </div>
           </div>
         </div>
