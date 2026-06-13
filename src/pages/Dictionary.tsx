@@ -1,7 +1,9 @@
 import { useState, useCallback, useMemo, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { useDictionary } from '../context/DictionaryContext';
+import { useAuth } from '../context/AuthContext';
 import { useLanguage } from '../context/LanguageContext';
+import { useModal } from '../context/ModalContext';
 import SlangCard from '../components/SlangCard';
 import {
   Search,
@@ -9,6 +11,7 @@ import {
   List,
   Layers,
   ArrowRight,
+  Loader2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import gsap from 'gsap';
@@ -21,7 +24,9 @@ const filterChips = ['All', 'Easy', 'Medium', 'Hard'] as const;
 type FilterChip = (typeof filterChips)[number];
 
 export default function Dictionary() {
-  const { dictionary, removeWord } = useDictionary();
+  const { dictionary, removeWord, loading: dictLoading } = useDictionary();
+  const { user } = useAuth();
+  const { openAuth } = useModal();
   const { currentLanguage } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [activeFilter, setActiveFilter] = useState<FilterChip>('All');
@@ -123,6 +128,18 @@ export default function Dictionary() {
     [removeWord]
   );
 
+  // Loading state
+  if (dictLoading) {
+    return (
+      <div className="min-h-[100dvh] bg-[#050505] pt-[72px] flex items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 size={32} className="text-[#E50914] animate-spin" />
+          <p className="text-[#999999] text-[0.875rem]">Loading your dictionary...</p>
+        </div>
+      </div>
+    );
+  }
+
   // Empty state
   if (dictionary.length === 0) {
     return (
@@ -196,6 +213,24 @@ export default function Dictionary() {
               <ArrowRight size={16} />
             </Link>
           </motion.div>
+
+          {/* Sign in prompt for guests */}
+          {!user && (
+            <motion.p
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              transition={{ duration: 0.4, delay: 0.7 }}
+              className="mt-6 text-[#666666] text-[0.8125rem]"
+            >
+              <button
+                onClick={openAuth}
+                className="text-[#E50914] font-medium hover:underline"
+              >
+                Sign in
+              </button>{' '}
+              to sync your dictionary across devices
+            </motion.p>
+          )}
         </div>
       </div>
     );
@@ -229,6 +264,17 @@ export default function Dictionary() {
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
               Your personal collection of slang words
+              {!user && (
+                <span className="block mt-1 text-[0.8125rem] text-[#666666]">
+                  <button
+                    onClick={openAuth}
+                    className="text-[#E50914] font-medium hover:underline"
+                  >
+                    Sign in
+                  </button>{' '}
+                  to sync across devices
+                </span>
+              )}
             </p>
           </motion.div>
 
@@ -456,6 +502,19 @@ export default function Dictionary() {
               Start Flashcard Training
             </Link>
           </div>
+
+          {/* Sign in prompt for guests */}
+          {!user && (
+            <p className="mt-4 text-[#666666] text-[0.8125rem]">
+              <button
+                onClick={openAuth}
+                className="text-[#E50914] font-medium hover:underline"
+              >
+                Sign in
+              </button>{' '}
+              to sync your dictionary across devices
+            </p>
+          )}
         </motion.div>
       </div>
     </div>

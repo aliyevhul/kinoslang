@@ -1,7 +1,9 @@
-import { useState, useEffect, useRef, useMemo } from 'react';
+import { useState, useEffect, useRef, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Trophy, Crown, Star, Search } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { collection, getDocs } from 'firebase/firestore';
+import { db } from '../firebase/config';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -35,72 +37,6 @@ function getTitleColor(rank: number, _words: number): string {
   return '#666666';
 }
 
-/* ── mock data ── */
-const ALL_USERS: LeaderboardUser[] = [
-  { rank: 1, name: 'cinephile99', words: 1247, avatar: 'C' },
-  { rank: 2, name: 'slangKing', words: 1102, avatar: 'S' },
-  { rank: 3, name: 'movieNerd', words: 987, avatar: 'M' },
-  { rank: 4, name: 'englishPro', words: 856, avatar: 'E' },
-  { rank: 5, name: 'wordWizard', words: 743, avatar: 'W' },
-  { rank: 6, name: 'filmFanatic', words: 698, avatar: 'F' },
-  { rank: 7, name: 'slangSeeker', words: 621, avatar: 'S' },
-  { rank: 8, name: 'tvAddict', words: 534, avatar: 'T' },
-  { rank: 9, name: 'phraseHunter', words: 487, avatar: 'P' },
-  { rank: 10, name: 'dialogueDiva', words: 412, avatar: 'D' },
-  { rank: 11, name: 'bingeWatcher', words: 389, avatar: 'B' },
-  { rank: 12, name: 'subtitleSage', words: 356, avatar: 'S' },
-  { rank: 13, name: 'cinemaSavant', words: 298, avatar: 'C' },
-  { rank: 14, name: 'popcornPolyglot', words: 245, avatar: 'P' },
-  { rank: 15, name: 'reelRookie', words: 187, avatar: 'R' },
-  { rank: 16, name: 'screenScribe', words: 156, avatar: 'S' },
-  { rank: 17, name: 'flickFan', words: 134, avatar: 'F' },
-  { rank: 18, name: 'showScholar', words: 112, avatar: 'S' },
-  { rank: 19, name: 'episodeAce', words: 89, avatar: 'E' },
-  { rank: 20, name: 'streamStrider', words: 67, avatar: 'S' },
-];
-
-const WEEK_USERS: LeaderboardUser[] = [
-  { rank: 1, name: 'slangKing', words: 42, avatar: 'S' },
-  { rank: 2, name: 'cinephile99', words: 38, avatar: 'C' },
-  { rank: 3, name: 'movieNerd', words: 31, avatar: 'M' },
-  { rank: 4, name: 'wordWizard', words: 27, avatar: 'W' },
-  { rank: 5, name: 'englishPro', words: 24, avatar: 'E' },
-  { rank: 6, name: 'tvAddict', words: 22, avatar: 'T' },
-  { rank: 7, name: 'filmFanatic', words: 19, avatar: 'F' },
-  { rank: 8, name: 'phraseHunter', words: 16, avatar: 'P' },
-  { rank: 9, name: 'slangSeeker', words: 14, avatar: 'S' },
-  { rank: 10, name: 'dialogueDiva', words: 11, avatar: 'D' },
-  { rank: 11, name: 'bingeWatcher', words: 9, avatar: 'B' },
-  { rank: 12, name: 'subtitleSage', words: 7, avatar: 'S' },
-  { rank: 13, name: 'cinemaSavant', words: 6, avatar: 'C' },
-  { rank: 14, name: 'popcornPolyglot', words: 4, avatar: 'P' },
-  { rank: 15, name: 'reelRookie', words: 3, avatar: 'R' },
-];
-
-const MONTH_USERS: LeaderboardUser[] = [
-  { rank: 1, name: 'cinephile99', words: 156, avatar: 'C' },
-  { rank: 2, name: 'slangKing', words: 142, avatar: 'S' },
-  { rank: 3, name: 'movieNerd', words: 128, avatar: 'M' },
-  { rank: 4, name: 'englishPro', words: 115, avatar: 'E' },
-  { rank: 5, name: 'wordWizard', words: 98, avatar: 'W' },
-  { rank: 6, name: 'filmFanatic', words: 87, avatar: 'F' },
-  { rank: 7, name: 'slangSeeker', words: 76, avatar: 'S' },
-  { rank: 8, name: 'tvAddict', words: 65, avatar: 'T' },
-  { rank: 9, name: 'phraseHunter', words: 58, avatar: 'P' },
-  { rank: 10, name: 'dialogueDiva', words: 52, avatar: 'D' },
-  { rank: 11, name: 'bingeWatcher', words: 48, avatar: 'B' },
-  { rank: 12, name: 'subtitleSage', words: 41, avatar: 'S' },
-  { rank: 13, name: 'cinemaSavant', words: 35, avatar: 'C' },
-  { rank: 14, name: 'popcornPolyglot', words: 28, avatar: 'P' },
-  { rank: 15, name: 'reelRookie', words: 22, avatar: 'R' },
-];
-
-const TIME_DATA: Record<string, LeaderboardUser[]> = {
-  'All Time': ALL_USERS,
-  'This Week': WEEK_USERS,
-  'This Month': MONTH_USERS,
-};
-
 /* ── shimmer keyframes ── */
 const shimmerCSS = `
 @keyframes shimmer {
@@ -115,13 +51,51 @@ export default function Leaderboard() {
   const navigate = useNavigate();
   const [activeFilter, setActiveFilter] = useState('All Time');
   const [search, setSearch] = useState('');
+  const [users, setUsers] = useState<LeaderboardUser[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
 
   const headerRef = useRef<HTMLDivElement>(null);
   const podiumRef = useRef<HTMLDivElement>(null);
   const tableRef = useRef<HTMLDivElement>(null);
   const tableRowRefs = useRef<(HTMLDivElement | null)[]>([]);
 
-  const currentUsers = TIME_DATA[activeFilter] || ALL_USERS;
+  // Fetch real users from Firestore
+  const loadLeaderboard = useCallback(async () => {
+    setLoading(true);
+    setError(null);
+    try {
+      const snapshot = await getDocs(collection(db, "users"));
+      const fetchedUsers: LeaderboardUser[] = [];
+      snapshot.forEach((docSnap) => {
+        const data = docSnap.data();
+        const name = data.name || data.displayName || "Anonymous";
+        fetchedUsers.push({
+          rank: 0, // assigned later
+          name,
+          words: (data.dictionary || []).length,
+          avatar: name.charAt(0).toUpperCase(),
+        });
+      });
+      fetchedUsers.sort((a, b) => b.words - a.words);
+      // Assign ranks
+      fetchedUsers.forEach((u, i) => { u.rank = i + 1; });
+      setUsers(fetchedUsers);
+    } catch (err) {
+      console.error("Failed to load leaderboard:", err);
+      setError("Failed to load leaderboard. Please try again later.");
+    } finally {
+      setLoading(false);
+    }
+  }, []);
+
+  useEffect(() => {
+    loadLeaderboard();
+  }, [loadLeaderboard]);
+
+  // For "This Week" and "This Month" we still show all-time data
+  // since we don't have time-based tracking yet
+  const currentUsers = users;
 
   /* derive top 3 + rest */
   const top3 = currentUsers.slice(0, 3);
@@ -135,9 +109,12 @@ export default function Leaderboard() {
     );
   }, [rest, search]);
 
-  /* current user mock rank */
-  const currentUserWords = 156;
-  const currentUserRank = 42;
+  /* current user rank */
+  const currentUserEntry = user
+    ? users.find((u) => u.name === (user.displayName || user.email?.split('@')[0]))
+    : null;
+  const currentUserWords = currentUserEntry?.words ?? 0;
+  const currentUserRank = currentUserEntry?.rank ?? 0;
 
   /* GSAP animations */
   useEffect(() => {
@@ -208,7 +185,7 @@ export default function Leaderboard() {
   }, [filtered]);
 
   /* ── podium config ── */
-  const podiumConfig = [
+  const podiumConfig = top3.length >= 3 ? [
     {
       place: 2,
       user: top3[1],
@@ -260,7 +237,7 @@ export default function Leaderboard() {
       bgGradient: 'linear-gradient(180deg, rgba(205,127,50,0.12) 0%, rgba(205,127,50,0.04) 100%)',
       borderColor: 'rgba(205,127,50,0.2)',
     },
-  ];
+  ] : [];
 
   return (
     <div className="min-h-[100dvh] bg-[#050505]">
@@ -300,7 +277,7 @@ export default function Leaderboard() {
           </div>
 
           {/* Your Rank Banner */}
-          {user && (
+          {user && currentUserRank > 0 && (
             <div
               className="mt-8 mx-auto max-w-[480px] flex items-center gap-4 px-6 py-4 rounded-xl cursor-pointer"
               style={{
@@ -316,7 +293,7 @@ export default function Leaderboard() {
                 className="w-9 h-9 rounded-full flex items-center justify-center text-[0.75rem] font-semibold text-white shrink-0"
                 style={{ border: '2px solid #E50914' }}
               >
-                {user.name.charAt(0).toUpperCase()}
+                {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
               </div>
               <div className="text-[0.9375rem] text-[#FFFFFF]">
                 You are ranked{' '}
@@ -328,246 +305,288 @@ export default function Leaderboard() {
         </div>
       </div>
 
-      {/* ── Section 2: Top 3 Podium ── */}
-      <div className="py-12 px-4 md:px-8 lg:px-16">
-        <div
-          ref={podiumRef}
-          className="max-w-[700px] mx-auto flex items-end justify-center gap-4 md:gap-6"
-        >
-          {podiumConfig.map((cfg) => (
-            <div
-              key={cfg.place}
-              className="podium-col flex flex-col items-center"
-            >
-              {/* Trophy */}
-              <div className="mb-3">
-                {cfg.place === 1 ? (
-                  <Crown size={cfg.trophySize} style={{ color: cfg.color }} />
-                ) : (
-                  <Trophy size={cfg.trophySize} style={{ color: cfg.color }} />
-                )}
-              </div>
-
-              {/* Avatar */}
-              <div
-                className="rounded-full flex items-center justify-center font-bold text-white"
-                style={{
-                  width: cfg.avatarSize,
-                  height: cfg.avatarSize,
-                  border: `3px solid ${cfg.color}`,
-                  boxShadow: cfg.glow,
-                  fontSize: cfg.avatarSize === 72 ? '1.5rem' : '1.25rem',
-                  backgroundColor: '#111111',
-                }}
-              >
-                {cfg.user?.avatar}
-              </div>
-
-              {/* Name */}
-              <span
-                className="mt-3 text-white"
-                style={{
-                  fontSize: cfg.fontSize,
-                  fontWeight: cfg.weight,
-                  fontFamily: 'Inter, sans-serif',
-                }}
-              >
-                @{cfg.user?.name}
-              </span>
-
-              {/* Words */}
-              <span
-                className="mt-1 font-semibold text-[#E50914]"
-                style={{
-                  fontSize: cfg.avatarSize === 72 ? '0.9375rem' : '0.875rem',
-                  fontFamily: 'Inter, sans-serif',
-                }}
-              >
-                {cfg.user?.words} words
-              </span>
-
-              {/* Rank badge */}
-              <div
-                className="mt-2 rounded-full flex items-center justify-center font-extrabold"
-                style={{
-                  width: cfg.badgeSize,
-                  height: cfg.badgeSize,
-                  background: `linear-gradient(135deg, ${cfg.colorFrom}, ${cfg.colorTo})`,
-                  color: cfg.place === 3 ? '#FFF' : '#000',
-                  fontSize: cfg.badgeSize === 32 ? '0.875rem' : '0.8125rem',
-                  fontFamily: 'Inter, sans-serif',
-                }}
-              >
-                {cfg.place}
-              </div>
-
-              {/* Podium base */}
-              <div
-                className="mt-4 rounded-t-xl flex items-center justify-center"
-                style={{
-                  width: cfg.width,
-                  height: cfg.height,
-                  background: cfg.bgGradient,
-                  border: `1px solid ${cfg.borderColor}`,
-                  backgroundSize: '200% 100%',
-                  animation: 'shimmer 3s ease-in-out infinite',
-                }}
-              />
-            </div>
-          ))}
+      {/* ── Loading State ── */}
+      {loading && (
+        <div className="flex items-center justify-center py-20">
+          <div className="flex flex-col items-center gap-4">
+            <div className="w-10 h-10 border-2 border-[#E50914] border-t-transparent rounded-full animate-spin" />
+            <p className="text-[#999999] text-[0.875rem]">Loading rankings...</p>
+          </div>
         </div>
-      </div>
+      )}
 
-      {/* ── Section 3: Rankings Table ── */}
-      <div id="rankings-table" className="pb-16 px-4 md:px-8 lg:px-16">
-        <div ref={tableRef} className="max-w-[800px] mx-auto">
-          {/* Search */}
-          <div className="mb-6 relative max-w-[360px]">
-            <Search
-              size={20}
-              className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666666]"
-            />
-            <input
-              type="text"
-              placeholder="Search users..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-              className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 pl-11 pr-4 text-[0.9375rem] text-white placeholder-[#666666] outline-none transition-all duration-200 focus:border-[#E50914] focus:shadow-[0_0_0_2px_#E5091480]"
-              style={{ fontFamily: 'Inter, sans-serif' }}
-            />
+      {/* ── Error State ── */}
+      {error && !loading && (
+        <div className="flex items-center justify-center py-20 px-4">
+          <div className="text-center max-w-[400px]">
+            <p className="text-[#EF4444] text-[1rem] mb-4">{error}</p>
+            <button
+              onClick={loadLeaderboard}
+              className="bg-[#E50914] text-white font-semibold text-[0.875rem] px-6 py-2.5 rounded-md transition-all duration-200 hover:bg-[#B20710]"
+            >
+              Retry
+            </button>
           </div>
+        </div>
+      )}
 
-          {/* Table Header */}
-          <div
-            className="sticky top-[72px] z-30 grid grid-cols-[60px_1fr_120px_100px] gap-4 px-5 py-3 border-b border-[#222222] bg-[#050505]"
-            style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-          >
-            <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em]">
-              Rank
-            </span>
-            <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em]">
-              User
-            </span>
-            <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em] text-right">
-              Words
-            </span>
-            <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em] text-right">
-              Title
-            </span>
+      {/* ── Empty State ── */}
+      {!loading && !error && users.length === 0 && (
+        <div className="flex items-center justify-center py-20 px-4">
+          <div className="text-center max-w-[400px]">
+            <Star size={48} className="text-[#666666] mx-auto mb-4" />
+            <h2 className="text-[1.25rem] font-bold text-white mb-2">No Users Yet</h2>
+            <p className="text-[#999999] text-[0.875rem]">
+              Be the first to join the leaderboard! Sign up and start saving slang words.
+            </p>
           </div>
+        </div>
+      )}
 
-          {/* Table Rows */}
-          <div className="flex flex-col mt-2">
-            {filtered.map((u, idx) => {
-              const rank = u.rank;
-              const isCurrentUser = user && u.name === user.name;
-              const title = getRankTitle(u.words);
-              const titleColor = getTitleColor(rank, u.words);
-
-              return (
+      {/* ── Section 2: Top 3 Podium ── */}
+      {!loading && !error && users.length > 0 && (
+        <>
+          <div className="py-12 px-4 md:px-8 lg:px-16">
+            <div
+              ref={podiumRef}
+              className="max-w-[700px] mx-auto flex items-end justify-center gap-4 md:gap-6"
+            >
+              {podiumConfig.map((cfg) => (
                 <div
-                  key={u.name + rank}
-                  ref={(el) => { tableRowRefs.current[idx] = el; }}
-                  className="grid grid-cols-[60px_1fr_120px_100px] gap-4 items-center px-5 py-3.5 rounded-lg transition-colors duration-200 cursor-pointer"
-                  style={{
-                    backgroundColor: isCurrentUser
-                      ? 'rgba(229,9,20,0.05)'
-                      : 'transparent',
-                    border: isCurrentUser
-                      ? '1px solid rgba(229,9,20,0.15)'
-                      : '1px solid transparent',
-                    fontFamily: 'Inter, sans-serif',
-                  }}
-                  onMouseEnter={(e) => {
-                    if (!isCurrentUser) {
-                      e.currentTarget.style.backgroundColor = '#1A1A1A';
-                    }
-                  }}
-                  onMouseLeave={(e) => {
-                    if (!isCurrentUser) {
-                      e.currentTarget.style.backgroundColor = 'transparent';
-                    }
-                  }}
-                  onClick={() => {
-                    navigate(`/profile/${u.name}`);
-                  }}
+                  key={cfg.place}
+                  className="podium-col flex flex-col items-center"
                 >
-                  {/* Rank */}
-                  <div className="flex items-center gap-1">
-                    {rank <= 10 && rank > 3 && (
-                      <Star size={12} className="text-[#666666]" />
-                    )}
-                    <span
-                      className="font-bold text-[1rem] font-mono"
-                      style={{
-                        color: rank <= 10 ? '#FFFFFF' : '#666666',
-                        fontFamily: 'IBM Plex Mono, monospace',
-                      }}
-                    >
-                      {rank <= 3 ? (
-                        <span>
-                          {rank === 1 && '🥇'}
-                          {rank === 2 && '🥈'}
-                          {rank === 3 && '🥉'}
-                        </span>
-                      ) : (
-                        `#${rank}`
-                      )}
-                    </span>
-                  </div>
-
-                  {/* User */}
-                  <div className="flex items-center gap-3">
-                    <div
-                      className="w-9 h-9 rounded-full flex items-center justify-center text-[0.75rem] font-semibold text-white shrink-0"
-                      style={{
-                        backgroundColor: '#111111',
-                        border: '2px solid #222222',
-                        fontFamily: 'Inter, sans-serif',
-                      }}
-                    >
-                      {u.avatar}
-                    </div>
-                    <span className="text-[0.9375rem] font-medium text-white">
-                      @{u.name}
-                    </span>
-                    {isCurrentUser && (
-                      <span
-                        className="text-[0.625rem] font-medium bg-[#E50914] text-white rounded px-1.5 py-0.5 uppercase tracking-wide"
-                        style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-                      >
-                        YOU
-                      </span>
+                  {/* Trophy */}
+                  <div className="mb-3">
+                    {cfg.place === 1 ? (
+                      <Crown size={cfg.trophySize} style={{ color: cfg.color }} />
+                    ) : (
+                      <Trophy size={cfg.trophySize} style={{ color: cfg.color }} />
                     )}
                   </div>
 
-                  {/* Words */}
-                  <span className="text-[1rem] font-bold text-white text-right">
-                    {u.words.toLocaleString()}
-                  </span>
-
-                  {/* Title */}
-                  <span
-                    className="text-[0.75rem] font-medium uppercase text-right"
+                  {/* Avatar */}
+                  <div
+                    className="rounded-full flex items-center justify-center font-bold text-white"
                     style={{
-                      color: titleColor,
-                      fontFamily: 'IBM Plex Mono, monospace',
+                      width: cfg.avatarSize,
+                      height: cfg.avatarSize,
+                      border: `3px solid ${cfg.color}`,
+                      boxShadow: cfg.glow,
+                      fontSize: cfg.avatarSize === 72 ? '1.5rem' : '1.25rem',
+                      backgroundColor: '#111111',
                     }}
                   >
-                    {title}
+                    {cfg.user?.avatar}
+                  </div>
+
+                  {/* Name */}
+                  <span
+                    className="mt-3 text-white"
+                    style={{
+                      fontSize: cfg.fontSize,
+                      fontWeight: cfg.weight,
+                      fontFamily: 'Inter, sans-serif',
+                    }}
+                  >
+                    @{cfg.user?.name}
                   </span>
+
+                  {/* Words */}
+                  <span
+                    className="mt-1 font-semibold text-[#E50914]"
+                    style={{
+                      fontSize: cfg.avatarSize === 72 ? '0.9375rem' : '0.875rem',
+                      fontFamily: 'Inter, sans-serif',
+                    }}
+                  >
+                    {cfg.user?.words} words
+                  </span>
+
+                  {/* Rank badge */}
+                  <div
+                    className="mt-2 rounded-full flex items-center justify-center font-extrabold"
+                    style={{
+                      width: cfg.badgeSize,
+                      height: cfg.badgeSize,
+                      background: `linear-gradient(135deg, ${cfg.colorFrom}, ${cfg.colorTo})`,
+                      color: cfg.place === 3 ? '#FFF' : '#000',
+                      fontSize: cfg.badgeSize === 32 ? '0.875rem' : '0.8125rem',
+                      fontFamily: 'Inter, sans-serif',
+                    }}
+                  >
+                    {cfg.place}
+                  </div>
+
+                  {/* Podium base */}
+                  <div
+                    className="mt-4 rounded-t-xl flex items-center justify-center"
+                    style={{
+                      width: cfg.width,
+                      height: cfg.height,
+                      background: cfg.bgGradient,
+                      border: `1px solid ${cfg.borderColor}`,
+                      backgroundSize: '200% 100%',
+                      animation: 'shimmer 3s ease-in-out infinite',
+                    }}
+                  />
                 </div>
-              );
-            })}
+              ))}
+            </div>
           </div>
 
-          {filtered.length === 0 && (
-            <div className="text-center py-12 text-[#666666] text-[0.9375rem]">
-              No users found matching &ldquo;{search}&rdquo;
+          {/* ── Section 3: Rankings Table ── */}
+          <div id="rankings-table" className="pb-16 px-4 md:px-8 lg:px-16">
+            <div ref={tableRef} className="max-w-[800px] mx-auto">
+              {/* Search */}
+              <div className="mb-6 relative max-w-[360px]">
+                <Search
+                  size={20}
+                  className="absolute left-3 top-1/2 -translate-y-1/2 text-[#666666]"
+                />
+                <input
+                  type="text"
+                  placeholder="Search users..."
+                  value={search}
+                  onChange={(e) => setSearch(e.target.value)}
+                  className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 pl-11 pr-4 text-[0.9375rem] text-white placeholder-[#666666] outline-none transition-all duration-200 focus:border-[#E50914] focus:shadow-[0_0_0_2px_#E5091480]"
+                  style={{ fontFamily: 'Inter, sans-serif' }}
+                />
+              </div>
+
+              {/* Table Header */}
+              <div
+                className="sticky top-[72px] z-30 grid grid-cols-[60px_1fr_120px_100px] gap-4 px-5 py-3 border-b border-[#222222] bg-[#050505]"
+                style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+              >
+                <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em]">
+                  Rank
+                </span>
+                <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em]">
+                  User
+                </span>
+                <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em] text-right">
+                  Words
+                </span>
+                <span className="text-[0.6875rem] font-medium uppercase text-[#666666] tracking-[0.08em] text-right">
+                  Title
+                </span>
+              </div>
+
+              {/* Table Rows */}
+              <div className="flex flex-col mt-2">
+                {filtered.map((u, idx) => {
+                  const rank = u.rank;
+                  const isCurrentUser = user && u.name === (user.displayName || user.email?.split('@')[0]);
+                  const title = getRankTitle(u.words);
+                  const titleColor = getTitleColor(rank, u.words);
+
+                  return (
+                    <div
+                      key={u.name + rank}
+                      ref={(el) => { tableRowRefs.current[idx] = el; }}
+                      className="grid grid-cols-[60px_1fr_120px_100px] gap-4 items-center px-5 py-3.5 rounded-lg transition-colors duration-200 cursor-pointer"
+                      style={{
+                        backgroundColor: isCurrentUser
+                          ? 'rgba(229,9,20,0.05)'
+                          : 'transparent',
+                        border: isCurrentUser
+                          ? '1px solid rgba(229,9,20,0.15)'
+                          : '1px solid transparent',
+                        fontFamily: 'Inter, sans-serif',
+                      }}
+                      onMouseEnter={(e) => {
+                        if (!isCurrentUser) {
+                          e.currentTarget.style.backgroundColor = '#1A1A1A';
+                        }
+                      }}
+                      onMouseLeave={(e) => {
+                        if (!isCurrentUser) {
+                          e.currentTarget.style.backgroundColor = 'transparent';
+                        }
+                      }}
+                      onClick={() => {
+                        navigate(`/profile/${u.name}`);
+                      }}
+                    >
+                      {/* Rank */}
+                      <div className="flex items-center gap-1">
+                        {rank <= 10 && rank > 3 && (
+                          <Star size={12} className="text-[#666666]" />
+                        )}
+                        <span
+                          className="font-bold text-[1rem] font-mono"
+                          style={{
+                            color: rank <= 10 ? '#FFFFFF' : '#666666',
+                            fontFamily: 'IBM Plex Mono, monospace',
+                          }}
+                        >
+                          {rank <= 3 ? (
+                            <span>
+                              {rank === 1 && '\u{1F947}'}
+                              {rank === 2 && '\u{1F948}'}
+                              {rank === 3 && '\u{1F949}'}
+                            </span>
+                          ) : (
+                            `#${rank}`
+                          )}
+                        </span>
+                      </div>
+
+                      {/* User */}
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="w-9 h-9 rounded-full flex items-center justify-center text-[0.75rem] font-semibold text-white shrink-0"
+                          style={{
+                            backgroundColor: '#111111',
+                            border: '2px solid #222222',
+                            fontFamily: 'Inter, sans-serif',
+                          }}
+                        >
+                          {u.avatar}
+                        </div>
+                        <span className="text-[0.9375rem] font-medium text-white">
+                          @{u.name}
+                        </span>
+                        {isCurrentUser && (
+                          <span
+                            className="text-[0.625rem] font-medium bg-[#E50914] text-white rounded px-1.5 py-0.5 uppercase tracking-wide"
+                            style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+                          >
+                            YOU
+                          </span>
+                        )}
+                      </div>
+
+                      {/* Words */}
+                      <span className="text-[1rem] font-bold text-white text-right">
+                        {u.words.toLocaleString()}
+                      </span>
+
+                      {/* Title */}
+                      <span
+                        className="text-[0.75rem] font-medium uppercase text-right"
+                        style={{
+                          color: titleColor,
+                          fontFamily: 'IBM Plex Mono, monospace',
+                        }}
+                      >
+                        {title}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+
+              {filtered.length === 0 && (
+                <div className="text-center py-12 text-[#666666] text-[0.9375rem]">
+                  No users found matching &ldquo;{search}&rdquo;
+                </div>
+              )}
             </div>
-          )}
-        </div>
-      </div>
+          </div>
+        </>
+      )}
     </div>
   );
 }

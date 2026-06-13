@@ -1,7 +1,9 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Menu, X } from 'lucide-react';
+import { Search, Menu, X, ChevronDown, LogOut, User } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useModal } from '../context/ModalContext';
+import { motion, AnimatePresence } from 'framer-motion';
 
 const navLinks = [
   { to: '/movies', label: 'Movies' },
@@ -13,8 +15,11 @@ const navLinks = [
 export default function Navbar() {
   const [scrolled, setScrolled] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
-  const { user } = useAuth();
+  const [dropdownOpen, setDropdownOpen] = useState(false);
+  const { user, logout } = useAuth();
+  const { openAuth } = useModal();
   const location = useLocation();
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     const handleScroll = () => {
@@ -24,6 +29,17 @@ export default function Navbar() {
     return () => window.removeEventListener('scroll', handleScroll);
   }, []);
 
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setDropdownOpen(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
   const isActive = useCallback(
     (path: string) => {
       if (path === '/movies') return location.pathname.startsWith('/movies') || location.pathname.startsWith('/slang');
@@ -31,6 +47,11 @@ export default function Navbar() {
     },
     [location.pathname]
   );
+
+  const handleLogout = async () => {
+    setDropdownOpen(false);
+    await logout();
+  };
 
   return (
     <nav
@@ -79,20 +100,66 @@ export default function Navbar() {
             <Search size={18} />
           </Link>
           {user ? (
-            <Link to="/profile">
-              <div
-                className="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center text-[0.75rem] font-semibold text-white border-2 border-[#E50914]"
+            <div className="relative" ref={dropdownRef}>
+              <button
+                onClick={() => setDropdownOpen(!dropdownOpen)}
+                className="flex items-center gap-2 focus:outline-none"
               >
-                {user.name.charAt(0).toUpperCase()}
-              </div>
-            </Link>
+                <div
+                  className="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center text-[0.75rem] font-semibold text-white border-2 border-[#E50914]"
+                >
+                  {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                </div>
+                <ChevronDown
+                  size={14}
+                  className={`text-[#666666] transition-transform duration-200 ${dropdownOpen ? 'rotate-180' : ''}`}
+                />
+              </button>
+
+              {/* Dropdown */}
+              <AnimatePresence>
+                {dropdownOpen && (
+                  <motion.div
+                    initial={{ opacity: 0, y: -5, scale: 0.95 }}
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={{ opacity: 0, y: -5, scale: 0.95 }}
+                    transition={{ duration: 0.15 }}
+                    className="absolute right-0 top-full mt-2 w-48 bg-[#111111] border border-[#222222] rounded-xl overflow-hidden shadow-xl z-50"
+                  >
+                    <div className="px-4 py-3 border-b border-[#222222]">
+                      <p className="text-[0.8125rem] font-medium text-white truncate">
+                        {user.displayName || user.email?.split('@')[0] || 'User'}
+                      </p>
+                      <p className="text-[0.6875rem] text-[#666666] truncate">
+                        {user.email}
+                      </p>
+                    </div>
+                    <Link
+                      to="/profile"
+                      onClick={() => setDropdownOpen(false)}
+                      className="flex items-center gap-2.5 px-4 py-2.5 text-[0.8125rem] text-[#999999] hover:text-white hover:bg-[#1A1A1A] transition-colors duration-200"
+                    >
+                      <User size={15} />
+                      Profile
+                    </Link>
+                    <button
+                      onClick={handleLogout}
+                      className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8125rem] text-[#EF4444] hover:bg-[rgba(239,68,68,0.05)] transition-colors duration-200"
+                    >
+                      <LogOut size={15} />
+                      Log Out
+                    </button>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </div>
           ) : (
-            <Link
-              to="/profile"
+            <button
+              onClick={openAuth}
               className="text-[0.875rem] font-medium text-white border border-[#222222] rounded px-4 py-2 transition-colors duration-200 hover:border-[#E50914] hover:text-[#E50914]"
             >
               Sign In
-            </Link>
+            </button>
           )}
         </div>
 
@@ -125,24 +192,40 @@ export default function Navbar() {
             ))}
             <div className="border-t border-[#222222] pt-3 mt-2">
               {user ? (
-                <Link
-                  to="/profile"
-                  onClick={() => setMobileOpen(false)}
-                  className="flex items-center gap-3 py-3 px-4"
-                >
-                  <div className="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center text-[0.75rem] font-semibold text-white border-2 border-[#E50914]">
-                    {user.name.charAt(0).toUpperCase()}
-                  </div>
-                  <span className="text-white text-[0.875rem]">{user.name}</span>
-                </Link>
+                <div className="flex flex-col gap-2">
+                  <Link
+                    to="/profile"
+                    onClick={() => setMobileOpen(false)}
+                    className="flex items-center gap-3 py-3 px-4"
+                  >
+                    <div className="w-8 h-8 rounded-full bg-[#111111] flex items-center justify-center text-[0.75rem] font-semibold text-white border-2 border-[#E50914]">
+                      {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
+                    </div>
+                    <span className="text-white text-[0.875rem]">
+                      {user.displayName || user.email?.split('@')[0] || 'User'}
+                    </span>
+                  </Link>
+                  <button
+                    onClick={() => {
+                      setMobileOpen(false);
+                      logout();
+                    }}
+                    className="flex items-center gap-2 py-3 px-4 text-[0.875rem] text-[#EF4444]"
+                  >
+                    <LogOut size={16} />
+                    Log Out
+                  </button>
+                </div>
               ) : (
-                <Link
-                  to="/profile"
-                  onClick={() => setMobileOpen(false)}
-                  className="block text-center text-[0.875rem] font-medium text-white border border-[#222222] rounded py-3 hover:border-[#E50914] hover:text-[#E50914] transition-colors duration-200"
+                <button
+                  onClick={() => {
+                    setMobileOpen(false);
+                    openAuth();
+                  }}
+                  className="block w-full text-center text-[0.875rem] font-medium text-white border border-[#222222] rounded py-3 hover:border-[#E50914] hover:text-[#E50914] transition-colors duration-200"
                 >
                   Sign In
-                </Link>
+                </button>
               )}
             </div>
           </div>

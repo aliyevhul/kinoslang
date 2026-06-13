@@ -2,7 +2,9 @@ import { Routes, Route } from 'react-router-dom';
 import { LanguageProvider } from './context/LanguageContext';
 import { AuthProvider } from './context/AuthContext';
 import { DictionaryProvider } from './context/DictionaryContext';
+import { ModalProvider } from './context/ModalContext';
 import Layout from './components/Layout';
+import AuthModal from './components/AuthModal';
 import Home from './pages/Home';
 import Movies from './pages/Movies';
 import SlangExplorer from './pages/SlangExplorer';
@@ -16,17 +18,20 @@ export default function App() {
     <LanguageProvider>
       <AuthProvider>
         <DictionaryProvider>
-          <Layout>
-            <Routes>
-              <Route path="/" element={<Home />} />
-              <Route path="/movies" element={<Movies />} />
-              <Route path="/slang/:movieId" element={<SlangExplorer />} />
-              <Route path="/dictionary" element={<Dictionary />} />
-              <Route path="/flashcards" element={<Flashcards />} />
-              <Route path="/leaderboard" element={<Leaderboard />} />
-              <Route path="/profile" element={<Profile />} />
-            </Routes>
-          </Layout>
+          <ModalProvider>
+            <Layout>
+              <Routes>
+                <Route path="/" element={<Home />} />
+                <Route path="/movies" element={<Movies />} />
+                <Route path="/slang/:movieId" element={<SlangExplorer />} />
+                <Route path="/dictionary" element={<Dictionary />} />
+                <Route path="/flashcards" element={<Flashcards />} />
+                <Route path="/leaderboard" element={<Leaderboard />} />
+                <Route path="/profile" element={<Profile />} />
+              </Routes>
+            </Layout>
+            <AuthModal />
+          </ModalProvider>
         </DictionaryProvider>
       </AuthProvider>
     </LanguageProvider>

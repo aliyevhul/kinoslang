@@ -5,14 +5,14 @@ import {
   Zap,
   MessageCircle,
   Flame,
-  Heart,
+  Star,
   Check,
   RotateCcw,
   ChevronRight,
   Camera,
-  Star,
   LogOut,
   Trophy,
+  Heart,
 } from 'lucide-react';
 import {
   PieChart,
@@ -23,6 +23,9 @@ import {
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';
 import { useDictionary } from '../context/DictionaryContext';
+import { useModal } from '../context/ModalContext';
+import { updateProfile } from 'firebase/auth';
+import { auth } from '../firebase/config';
 import gsap from 'gsap';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
 
@@ -93,30 +96,44 @@ const ACTIVITY_ICON = {
   practiced: { icon: RotateCcw, bg: 'rgba(59,130,246,0.1)', color: '#3B82F6' },
 };
 
-/* ── chart data (mock) ── */
-const DIFFICULTY_DATA = [
-  { name: 'Easy', value: 684, color: '#22C55E' },
-  { name: 'Medium', value: 477, color: '#F59E0B' },
-  { name: 'Hard', value: 86, color: '#EF4444' },
-];
+/* ── chart helpers ── */
 
-const TYPE_DATA = [
-  { name: 'Street', count: 342, color: '#E50914' },
-  { name: 'Modern', count: 285, color: '#3B82F6' },
-  { name: 'Cultural', count: 198, color: '#8B5CF6' },
-  { name: 'Vintage', count: 156, color: '#F59E0B' },
-  { name: 'Internet', count: 145, color: '#22C55E' },
-  { name: 'Formal', count: 121, color: '#6B7280' },
-];
+/* ── chart data (from real dictionary) ── */
+function getDifficultyData(dictionary: { difficulty: string }[]) {
+  const easy = dictionary.filter((w) => w.difficulty === 'easy').length;
+  const medium = dictionary.filter((w) => w.difficulty === 'medium').length;
+  const hard = dictionary.filter((w) => w.difficulty === 'hard').length;
+  return [
+    { name: 'Easy', value: easy || 0, color: '#22C55E' },
+    { name: 'Medium', value: medium || 0, color: '#F59E0B' },
+    { name: 'Hard', value: hard || 0, color: '#EF4444' },
+  ];
+}
+
+function getTypeData(dictionary: { type: string }[]) {
+  const typeCounts: Record<string, number> = {};
+  dictionary.forEach((w) => {
+    const t = w.type;
+    typeCounts[t] = (typeCounts[t] || 0) + 1;
+  });
+  const colors = ['#E50914', '#3B82F6', '#8B5CF6', '#F59E0B', '#22C55E', '#6B7280', '#F97316', '#EC4899'];
+  return Object.entries(typeCounts)
+    .map(([name, count], i) => ({ name, count, color: colors[i % colors.length] }))
+    .sort((a, b) => b.count - a.count)
+    .slice(0, 8);
+}
 
 /* ── component ── */
 export default function Profile() {
   const { user, logout } = useAuth();
   const { dictionary } = useDictionary();
+  const { openAuth } = useModal();
   const navigate = useNavigate();
 
-  const [displayName, setDisplayName] = useState(user?.name || '');
+  const [displayName, setDisplayName] = useState(user?.displayName || '');
   const [nativeLang, setNativeLang] = useState('en');
+  const [isSaving, setIsSaving] = useState(false);
+  const [saveMsg, setSaveMsg] = useState<string | null>(null);
 
   /* refs for GSAP */
   const headerRef = useRef<HTMLDivElement>(null);
@@ -133,6 +150,16 @@ export default function Profile() {
   const rankTitle = getRankTitle(totalWords);
   const streakDays = 15;
   const bestStreak = 28;
+
+  const difficultyData = getDifficultyData(dictionary);
+  const typeData = getTypeData(dictionary);
+
+  /* Update displayName when user changes */
+  useEffect(() => {
+    if (user?.displayName) {
+      setDisplayName(user.displayName);
+    }
+  }, [user?.displayName]);
 
   /* GSAP animations */
   useEffect(() => {
@@ -257,6 +284,23 @@ export default function Profile() {
     return () => ctx.revert();
   }, []);
 
+  const handleSaveName = async () => {
+    if (!displayName.trim()) return;
+    setIsSaving(true);
+    setSaveMsg(null);
+    try {
+      if (auth.currentUser) {
+        await updateProfile(auth.currentUser, { displayName: displayName.trim() });
+        setSaveMsg('Display name updated!');
+        setTimeout(() => setSaveMsg(null), 3000);
+      }
+    } catch (err) {
+      setSaveMsg('Failed to update name');
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
   /* ── not logged in state ── */
   if (!user) {
     return (
@@ -271,12 +315,12 @@ export default function Profile() {
           <p className="text-[#999999] text-[1rem] mb-8 leading-relaxed">
             Track your progress, view your stats, and climb the leaderboard.
           </p>
-          <Link
-            to="/profile"
+          <button
+            onClick={openAuth}
             className="inline-block bg-[#E50914] text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-8 py-3 rounded-md transition-all duration-200 hover:bg-[#B20710] hover:-translate-y-[1px]"
           >
             Sign In
-          </Link>
+          </button>
           <p className="mt-6 text-[#666666] text-[0.875rem]">
             or{' '}
             <Link
@@ -310,7 +354,7 @@ export default function Profile() {
                 fontFamily: 'Inter, sans-serif',
               }}
             >
-              {user.name.charAt(0).toUpperCase()}
+              {(user.displayName || user.email || 'U').charAt(0).toUpperCase()}
             </div>
             {/* Edit overlay */}
             <div className="absolute inset-0 rounded-full bg-[rgba(5,5,5,0.6)] flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity duration-200 cursor-pointer">
@@ -324,7 +368,7 @@ export default function Profile() {
               className="text-[clamp(1.5rem,3vw,2rem)] font-bold text-white tracking-[-0.02em]"
               style={{ fontFamily: 'Inter, sans-serif' }}
             >
-              @{user.name}
+              @{user.displayName || user.email?.split('@')[0] || 'User'}
             </h1>
 
             {/* Rank Badge */}
@@ -347,7 +391,7 @@ export default function Profile() {
                 className="text-[0.75rem] text-[#666666]"
                 style={{ fontFamily: 'IBM Plex Mono, monospace' }}
               >
-                Member since Jan 2025
+                {user.email}
               </span>
               <span
                 className="text-[0.75rem] font-medium text-[#E50914]"
@@ -470,54 +514,62 @@ export default function Profile() {
               By Difficulty
             </h3>
             <div className="flex flex-col items-center">
-              <ResponsiveContainer width="100%" height={220}>
-                <PieChart>
-                  <Pie
-                    data={DIFFICULTY_DATA}
-                    cx="50%"
-                    cy="50%"
-                    innerRadius={60}
-                    outerRadius={90}
-                    paddingAngle={3}
-                    dataKey="value"
-                    stroke="none"
-                  >
-                    {DIFFICULTY_DATA.map((entry) => (
-                      <Cell key={entry.name} fill={entry.color} />
-                    ))}
-                  </Pie>
-                  <Tooltip
-                    contentStyle={{
-                      backgroundColor: '#111111',
-                      border: '1px solid #222222',
-                      borderRadius: '8px',
-                      color: '#FFFFFF',
-                      fontSize: '0.8125rem',
-                    }}
-                    itemStyle={{ color: '#FFFFFF' }}
-                  />
-                </PieChart>
-              </ResponsiveContainer>
-              {/* Center text */}
-              <div className="absolute mt-[-140px] pointer-events-none">
-                <div className="text-center">
-                  <span
-                    className="text-[1.5rem] font-bold text-white block"
-                    style={{ fontFamily: 'Inter, sans-serif' }}
-                  >
-                    {DIFFICULTY_DATA.reduce((s, d) => s + d.value, 0).toLocaleString()}
-                  </span>
-                  <span
-                    className="text-[0.6875rem] text-[#666666] uppercase"
-                    style={{ fontFamily: 'IBM Plex Mono, monospace' }}
-                  >
-                    Words
-                  </span>
+              {totalWords > 0 ? (
+                <>
+                  <ResponsiveContainer width="100%" height={220}>
+                    <PieChart>
+                      <Pie
+                        data={difficultyData}
+                        cx="50%"
+                        cy="50%"
+                        innerRadius={60}
+                        outerRadius={90}
+                        paddingAngle={3}
+                        dataKey="value"
+                        stroke="none"
+                      >
+                        {difficultyData.map((entry) => (
+                          <Cell key={entry.name} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip
+                        contentStyle={{
+                          backgroundColor: '#111111',
+                          border: '1px solid #222222',
+                          borderRadius: '8px',
+                          color: '#FFFFFF',
+                          fontSize: '0.8125rem',
+                        }}
+                        itemStyle={{ color: '#FFFFFF' }}
+                      />
+                    </PieChart>
+                  </ResponsiveContainer>
+                  {/* Center text */}
+                  <div className="absolute mt-[-140px] pointer-events-none">
+                    <div className="text-center">
+                      <span
+                        className="text-[1.5rem] font-bold text-white block"
+                        style={{ fontFamily: 'Inter, sans-serif' }}
+                      >
+                        {totalWords.toLocaleString()}
+                      </span>
+                      <span
+                        className="text-[0.6875rem] text-[#666666] uppercase"
+                        style={{ fontFamily: 'IBM Plex Mono, monospace' }}
+                      >
+                        Words
+                      </span>
+                    </div>
+                  </div>
+                </>
+              ) : (
+                <div className="h-[220px] flex items-center justify-center text-[#666666] text-[0.875rem]">
+                  No words saved yet
                 </div>
-              </div>
+              )}
               {/* Legend */}
               <div className="flex flex-wrap justify-center gap-4 mt-4">
-                {DIFFICULTY_DATA.map((d) => (
+                {difficultyData.map((d) => (
                   <div key={d.name} className="flex items-center gap-2">
                     <div
                       className="w-2 h-2 rounded-full"
@@ -540,33 +592,39 @@ export default function Profile() {
             <h3 className="text-[1rem] font-semibold text-white mb-6">
               By Type
             </h3>
-            <div className="space-y-4">
-              {TYPE_DATA.map((t) => {
-                const max = Math.max(...TYPE_DATA.map((d) => d.count));
-                const pct = Math.round((t.count / max) * 100);
-                return (
-                  <div key={t.name}>
-                    <div className="flex items-center justify-between mb-1.5">
-                      <span className="text-[0.875rem] font-medium text-white">
-                        {t.name}
-                      </span>
-                      <span className="text-[0.75rem] font-medium text-[#999999]">
-                        {t.count} ({Math.round((t.count / 1247) * 100)}%)
-                      </span>
+            {totalWords > 0 && typeData.length > 0 ? (
+              <div className="space-y-4">
+                {typeData.map((t) => {
+                  const max = Math.max(...typeData.map((d) => d.count));
+                  const pct = max > 0 ? Math.round((t.count / max) * 100) : 0;
+                  return (
+                    <div key={t.name}>
+                      <div className="flex items-center justify-between mb-1.5">
+                        <span className="text-[0.875rem] font-medium text-white">
+                          {t.name}
+                        </span>
+                        <span className="text-[0.75rem] font-medium text-[#999999]">
+                          {t.count} ({totalWords > 0 ? Math.round((t.count / totalWords) * 100) : 0}%)
+                        </span>
+                      </div>
+                      <div className="w-full h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all duration-1000 ease-out"
+                          style={{
+                            width: `${pct}%`,
+                            backgroundColor: t.color,
+                          }}
+                        />
+                      </div>
                     </div>
-                    <div className="w-full h-2 bg-[#1A1A1A] rounded-full overflow-hidden">
-                      <div
-                        className="h-full rounded-full transition-all duration-1000 ease-out"
-                        style={{
-                          width: `${pct}%`,
-                          backgroundColor: t.color,
-                        }}
-                      />
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
+                  );
+                })}
+              </div>
+            ) : (
+              <div className="h-[220px] flex items-center justify-center text-[#666666] text-[0.875rem]">
+                No words saved yet
+              </div>
+            )}
           </div>
         </div>
       </div>
@@ -649,6 +707,9 @@ export default function Profile() {
                 className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 px-4 text-[0.9375rem] text-white placeholder-[#666666] outline-none transition-all duration-200 focus:border-[#E50914] focus:shadow-[0_0_0_2px_#E5091480]"
                 style={{ fontFamily: 'Inter, sans-serif' }}
               />
+              {saveMsg && (
+                <p className="mt-1.5 text-[0.75rem] font-medium text-[#22C55E]">{saveMsg}</p>
+              )}
             </div>
 
             {/* Email */}
@@ -661,7 +722,7 @@ export default function Profile() {
               </label>
               <input
                 type="email"
-                value={user.email}
+                value={user.email || ''}
                 readOnly
                 className="w-full bg-[#111111] border border-[#222222] rounded-lg py-3 px-4 text-[0.9375rem] text-[#666666] outline-none cursor-not-allowed"
                 style={{ fontFamily: 'Inter, sans-serif' }}
@@ -697,11 +758,15 @@ export default function Profile() {
 
             {/* Save / Cancel */}
             <div className="flex gap-3 mt-2">
-              <button className="bg-[#E50914] text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-6 py-3 rounded-md transition-all duration-200 hover:bg-[#B20710] hover:-translate-y-[1px]">
-                Save Changes
+              <button
+                onClick={handleSaveName}
+                disabled={isSaving}
+                className="bg-[#E50914] text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-6 py-3 rounded-md transition-all duration-200 hover:bg-[#B20710] hover:-translate-y-[1px] disabled:opacity-60"
+              >
+                {isSaving ? 'Saving...' : 'Save Changes'}
               </button>
               <button
-                onClick={() => setDisplayName(user.name)}
+                onClick={() => setDisplayName(user.displayName || '')}
                 className="bg-transparent text-white font-semibold text-[0.875rem] uppercase tracking-[0.05em] px-6 py-3 rounded-md border border-[#222222] transition-all duration-200 hover:border-[#E50914] hover:text-[#E50914]"
               >
                 Cancel
