@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { useState, useEffect, useCallback, useRef } from 'react';
+import { Link } from 'react-router-dom';
 import { useDictionary } from '../context/DictionaryContext';
 import Flashcard from '../components/Flashcard';
 import {
@@ -24,7 +24,6 @@ interface CardRating {
 
 export default function FlashcardsPage() {
   const { dictionary } = useDictionary();
-  const navigate = useNavigate();
 
   const [sessionState, setSessionState] = useState<SessionState>(
     dictionary.length === 0 ? 'intro' : 'intro'

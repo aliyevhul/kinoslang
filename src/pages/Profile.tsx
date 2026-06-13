@@ -19,10 +19,6 @@ import {
   Pie,
   Cell,
   ResponsiveContainer,
-  BarChart,
-  Bar,
-  XAxis,
-  YAxis,
   Tooltip,
 } from 'recharts';
 import { useAuth } from '../context/AuthContext';

@@ -4,60 +4,12 @@ import { AuthProvider } from './context/AuthContext';
 import { DictionaryProvider } from './context/DictionaryContext';
 import Layout from './components/Layout';
 import Home from './pages/Home';
-
-const Movies = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Movies</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
-
-const SlangExplorer = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Slang Explorer</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
-
-const Dictionary = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Dictionary</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
-
-const Flashcards = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Flashcards</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
-
-const Leaderboard = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Leaderboard</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
-
-const Profile = () => (
-  <div className="min-h-[100dvh] flex items-center justify-center">
-    <div className="text-center">
-      <h1 className="text-3xl font-bold text-white mb-4">Profile</h1>
-      <p className="text-[#999999]">Coming soon...</p>
-    </div>
-  </div>
-);
+import Movies from './pages/Movies';
+import SlangExplorer from './pages/SlangExplorer';
+import Dictionary from './pages/Dictionary';
+import Flashcards from './pages/Flashcards';
+import Leaderboard from './pages/Leaderboard';
+import Profile from './pages/Profile';
 
 export default function App() {
   return (

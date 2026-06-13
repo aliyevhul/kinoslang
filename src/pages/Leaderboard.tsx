@@ -28,7 +28,7 @@ function getRankTitle(words: number): string {
   return 'Newbie';
 }
 
-function getTitleColor(rank: number, words: number): string {
+function getTitleColor(rank: number, _words: number): string {
   if (rank === 1) return '#FFD700';
   if (rank <= 3) return '#E50914';
   if (rank <= 10) return '#999999';

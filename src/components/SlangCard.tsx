@@ -134,7 +134,8 @@ function DeleteConfirmButton({ onConfirm }: { onConfirm: () => void }) {
 /* ------------------------------------------------------------------ */
 
 interface SlangCardProps {
-  slang: SlangWordType;
+  slang?: SlangWordType;
+  word?: SlangWordType;
   movieTitle?: string;
   movieYear?: number;
   translation?: string;
@@ -142,6 +143,8 @@ interface SlangCardProps {
   variant?: 'grid' | 'list';
   showRemove?: boolean;
   onRemove?: () => void;
+  saved?: boolean;
+  onToggleSave?: () => void;
 }
 
 /* ------------------------------------------------------------------ */
@@ -150,6 +153,7 @@ interface SlangCardProps {
 
 export default function SlangCard({
   slang,
+  word,
   movieTitle,
   movieYear,
   translation: propTranslation,
@@ -157,16 +161,22 @@ export default function SlangCard({
   variant = 'grid',
   showRemove = false,
   onRemove,
+  saved: savedProp,
+  onToggleSave,
 }: SlangCardProps) {
   const { isSaved, addWord, removeWord } = useDictionary();
   const { currentLanguage } = useLanguage();
-  const saved = isSaved(slang.word);
+
+  const slangData = slang ?? word;
+  if (!slangData) return null;
+
+  const saved = savedProp ?? isSaved(slangData.word);
 
   const translation =
     propTranslation ??
-    slang.translations[currentLanguage] ??
-    slang.translations['en'] ??
-    slang.word;
+    slangData.translations[currentLanguage] ??
+    slangData.translations['en'] ??
+    slangData.word;
 
   const [hovered, setHovered] = useState(false);
   const [heartAnimating, setHeartAnimating] = useState(false);
@@ -206,15 +216,21 @@ export default function SlangCard({
   const handleHeartClick = useCallback(
     (e: React.MouseEvent) => {
       e.stopPropagation();
+      if (onToggleSave) {
+        onToggleSave();
+        setHeartAnimating(true);
+        setTimeout(() => setHeartAnimating(false), 300);
+        return;
+      }
       setHeartAnimating(true);
       if (saved) {
-        removeWord(slang.word);
+        removeWord(slangData.word);
       } else {
-        addWord(slang);
+        addWord(slangData);
       }
       setTimeout(() => setHeartAnimating(false), 300);
     },
-    [saved, slang, addWord, removeWord]
+    [saved, slangData, addWord, removeWord, onToggleSave]
   );
 
   /* ---------- LIST variant ---------- */
@@ -227,12 +243,12 @@ export default function SlangCard({
         exit={{ opacity: 0, y: -10, transition: { duration: 0.2 } }}
         className="flex items-center gap-4 p-4 rounded-xl border border-[#222222] bg-[#111111] hover:border-[rgba(229,9,20,0.3)] transition-colors duration-200"
       >
-        <AudioButton text={slang.word} size={36} />
+        <AudioButton text={slangData.word} size={36} />
         <div className="flex-1 min-w-0">
           <div className="flex items-center gap-2 mb-1">
-            <span className="font-semibold text-white text-base truncate">{slang.word}</span>
-            <DifficultyTag difficulty={slang.difficulty as 'easy' | 'medium' | 'hard'} />
-            <TypeTag type={slang.type} />
+            <span className="font-semibold text-white text-base truncate">{slangData.word}</span>
+            <DifficultyTag difficulty={slangData.difficulty as 'easy' | 'medium' | 'hard'} />
+            <TypeTag type={slangData.type} />
           </div>
           <p className="text-[#999999] text-sm truncate">{translation}</p>
         </div>
@@ -279,12 +295,12 @@ export default function SlangCard({
       {/* Card header: tags + actions */}
       <div className="flex justify-between items-start mb-3">
         <div className="flex items-center gap-2 flex-wrap">
-          <DifficultyTag difficulty={slang.difficulty as 'easy' | 'medium' | 'hard'} />
-          <TypeTag type={slang.type} />
+          <DifficultyTag difficulty={slangData.difficulty as 'easy' | 'medium' | 'hard'} />
+          <TypeTag type={slangData.type} />
         </div>
 
         <div className="flex items-center gap-2">
-          <AudioButton text={slang.word} />
+          <AudioButton text={slangData.word} />
           {showRemove && onRemove ? (
             <DeleteConfirmButton onConfirm={onRemove} />
           ) : (
@@ -310,7 +326,7 @@ export default function SlangCard({
         className="text-white mb-2"
         style={{ fontFamily: 'Inter, sans-serif', fontWeight: 800, fontSize: '2rem' }}
       >
-        {slang.word}
+        {slangData.word}
       </h3>
 
       {/* Movie quote */}
@@ -325,7 +341,7 @@ export default function SlangCard({
           lineHeight: 1.5,
         }}
       >
-        &ldquo;{slang.quote}&rdquo;
+        &ldquo;{slangData.quote}&rdquo;
       </p>
 
       {/* Translation */}
