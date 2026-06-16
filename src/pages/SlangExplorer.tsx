@@ -4,7 +4,7 @@ import { ArrowLeft, GraduationCap, Globe } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { movies } from '../data/movies';
+import { useMovies } from '../context/MoviesContext';
 import { useLanguage } from '../context/LanguageContext';
 import { useAuth } from '../context/AuthContext';
 import { languages } from '../data/languages';
@@ -16,6 +16,7 @@ export default function SlangExplorer() {
   const { movieId } = useParams<{ movieId: string }>();
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { getMovieById, loading: moviesLoading } = useMovies();
   const { currentLanguage, setLanguage } = useLanguage();
 
   const headerRef = useRef<HTMLDivElement>(null);
@@ -27,10 +28,9 @@ export default function SlangExplorer() {
   const langDropdownTriggerRef = useRef<HTMLButtonElement>(null);
   const langDropdownPanelRef = useRef<HTMLDivElement>(null);
 
-  // Find the movie
   const movie = useMemo(
-    () => movies.find((m) => m.id === movieId),
-    [movieId]
+    () => (movieId ? getMovieById(movieId) : undefined),
+    [movieId, getMovieById]
   );
 
   // Current language info
@@ -173,7 +173,17 @@ export default function SlangExplorer() {
     { scope: gridRef, dependencies: [flashKey] }
   );
 
-  // Movie not found state
+  if (moviesLoading) {
+    return (
+      <div
+        className="min-h-[100dvh] flex items-center justify-center"
+        style={{ backgroundColor: '#050505' }}
+      >
+        <p className="text-[#666]">Loading...</p>
+      </div>
+    );
+  }
+
   if (!movie) {
     return (
       <div

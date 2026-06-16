@@ -4,7 +4,7 @@ import { Search, ChevronDown, Film } from 'lucide-react';
 import gsap from 'gsap';
 import { useGSAP } from '@gsap/react';
 import { ScrollTrigger } from 'gsap/ScrollTrigger';
-import { movies } from '../data/movies';
+import { useMovies } from '../context/MoviesContext';
 import MoviePosterCard from '../components/MoviePosterCard';
 
 gsap.registerPlugin(ScrollTrigger);
@@ -12,6 +12,7 @@ gsap.registerPlugin(ScrollTrigger);
 const sortOptions = ['Popular', 'Newest', 'A-Z', 'Most Slangs'];
 
 export default function Movies() {
+  const { movies } = useMovies();
   const navigate = useNavigate();
   const heroRef = useRef<HTMLDivElement>(null);
   const filtersRef = useRef<HTMLDivElement>(null);
@@ -31,7 +32,7 @@ export default function Movies() {
     const gSet = new Set<string>();
     movies.forEach((m) => m.genre.forEach((g) => gSet.add(g)));
     return ['All', ...Array.from(gSet).sort()];
-  }, []);
+  }, [movies]);
 
   // Filter + sort movies
   const filteredMovies = useMemo(() => {
@@ -66,7 +67,7 @@ export default function Movies() {
     }
 
     return result;
-  }, [searchQuery, activeGenre, sortBy]);
+  }, [movies, searchQuery, activeGenre, sortBy]);
 
   // Autocomplete suggestions
   const autocompleteSuggestions = useMemo(() => {
@@ -75,7 +76,7 @@ export default function Movies() {
     return movies
       .filter((m) => m.title.toLowerCase().includes(q))
       .slice(0, 6);
-  }, [searchQuery]);
+  }, [movies, searchQuery]);
 
   // Hero entrance animation
   useGSAP(

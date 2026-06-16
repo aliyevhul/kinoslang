@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Search, Menu, X, ChevronDown, LogOut, User, Award, Settings, Flame } from 'lucide-react';
+import { Search, Menu, X, ChevronDown, LogOut, User, Award, Settings, Flame, Shield } from 'lucide-react';
 import { useAuth } from '../context/AuthContext';
+import { useAdmin } from '../context/AdminContext';
 import { useStreak } from '../context/StreakContext';
 import { useModal } from '../context/ModalContext';
 import AvatarUpload from './AvatarUpload';
@@ -19,6 +20,7 @@ export default function Navbar() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [dropdownOpen, setDropdownOpen] = useState(false);
   const { user, logout } = useAuth();
+  const { isAdmin } = useAdmin();
   const { streak } = useStreak();
   const { openAuth } = useModal();
   const location = useLocation();
@@ -144,6 +146,11 @@ export default function Navbar() {
                       <Link to="/settings" onClick={() => setDropdownOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-[0.8125rem] text-[#999999] hover:text-white hover:bg-[#1A1A1A] transition-colors duration-200">
                         <Settings size={15} /> Settings
                       </Link>
+                      {isAdmin && (
+                        <Link to="/admin" onClick={() => setDropdownOpen(false)} className="flex items-center gap-2.5 px-4 py-2.5 text-[0.8125rem] text-[#E50914] hover:text-white hover:bg-[#1A1A1A] transition-colors duration-200">
+                          <Shield size={15} /> Admin Panel
+                        </Link>
+                      )}
                       <button
                         onClick={handleLogout}
                         className="w-full flex items-center gap-2.5 px-4 py-2.5 text-[0.8125rem] text-[#EF4444] hover:bg-[rgba(239,68,68,0.05)] transition-colors duration-200 border-t border-[#222222]"
@@ -199,6 +206,11 @@ export default function Navbar() {
                   <Link to="/settings" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 py-2 px-4 text-[#999]">
                     <Settings size={16} /> Settings
                   </Link>
+                  {isAdmin && (
+                    <Link to="/admin" onClick={() => setMobileOpen(false)} className="flex items-center gap-3 py-2 px-4 text-[#E50914]">
+                      <Shield size={16} /> Admin Panel
+                    </Link>
+                  )}
                   <button onClick={() => { setMobileOpen(false); logout(); }} className="flex items-center gap-2 py-3 px-4 text-[0.875rem] text-[#EF4444]">
                     <LogOut size={16} /> Log Out
                   </button>
